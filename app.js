@@ -1,5 +1,5 @@
 // Version 32.1 - U-8 / T-8 System
-import { inventoryU8, inventoryT8 } from './data.js?v=32';
+import { inventoryU8 } from './data.js?v=32.3';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
@@ -125,7 +125,6 @@ function showUnitSelection() {
 }
 
 document.getElementById('select-u8').onclick = () => startApp('CIA-28');
-document.getElementById('select-t8').onclick = () => startApp('T-8');
 
 function startApp(unit) {
     currentUnit = unit;
@@ -155,7 +154,7 @@ ELEMENTS.changeUnitBtn.onclick = () => {
 ELEMENTS.logoutBtn.onclick = () => location.reload();
 
 function getColName() {
-    return currentUnit === 'CIA-28' ? 'inventario_cia28' : 'inventario_t8';
+    return 'inventario_cia28';
 }
 
 // --- INVENTORY LOGIC ---
@@ -168,7 +167,7 @@ async function loadInventory() {
     
     if (snapshot.empty) {
         // First time sync from local data
-        currentInventory = (currentUnit === 'CIA-28' ? inventoryU8 : inventoryT8);
+        currentInventory = inventoryU8;
         for (const item of currentInventory) {
             await setDoc(doc(db, colName, item.codigo), {
                 ...item,
@@ -263,7 +262,7 @@ window.togglePhotoRow = (codigo) => {
 };
 
 window.uploadItemPhoto = (codigo) => {
-    const collectionName = currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
+    const collectionName = getColName();
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
@@ -281,7 +280,7 @@ window.uploadItemPhoto = (codigo) => {
 };
 
 window.deleteItemPhoto = async (codigo) => {
-    const collectionName = currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
+    const collectionName = getColName();
     if (confirm("¿Eliminar la fotografía de este item?")) {
         await updateDoc(doc(db, collectionName, codigo), { foto: null });
         loadInventory();
@@ -368,7 +367,7 @@ document.getElementById('edit-item-form').onsubmit = async (e) => {
 };
 
 window.deleteItem = async (codigo) => {
-    const collectionName = currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
+    const collectionName = getColName();
     if (confirm(`¿Eliminar definitivamente el item ${codigo}?`)) {
         await deleteDoc(doc(db, collectionName, codigo));
         loadInventory();

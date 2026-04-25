@@ -158,9 +158,4 @@ const inventoryU8 = [
     { codigo: "00031455", sicafi: "2003232", pf: "18277", descripcion: "PALAS P/CUADRADA", ubicacion: "I-307-U-28", marca: "No Aplica", modelo: "NA", serie: "NA" }
 ];
 
-const inventoryT8 = [
-    // Keep T-8 if not provided, but the user said "CAMBIA LOS DATOS SOLO EN ESTA CARPETA"
-    // I will keep the original T8 for now unless images for T8 are provided.
-];
-
-export { inventoryU8, inventoryT8 };
+export { inventoryU8 };
