@@ -1,3 +1,4 @@
+// Version 32.1 - U-8 / T-8 System
 import { inventoryU8, inventoryT8 } from './data.js?v=32';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
