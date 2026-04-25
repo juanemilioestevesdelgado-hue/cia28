@@ -424,10 +424,50 @@ function appendMessage(role, text) {
 }
 
 // --- EXPORT & SYNC ---
+let pdfReportImage = null;
+
 ELEMENTS.exportPdfBtn.onclick = () => {
+    document.getElementById('pdf-image-modal').classList.remove('hidden');
+    pdfReportImage = null;
+    document.getElementById('pdf-preview-container').style.display = 'none';
+    document.getElementById('pdf-image-input').value = '';
+};
+
+document.querySelector('.close-pdf-modal').onclick = () => document.getElementById('pdf-image-modal').classList.add('hidden');
+document.getElementById('cancel-pdf-btn').onclick = () => generatePDF();
+
+document.getElementById('pdf-image-input').onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            pdfReportImage = event.target.result;
+            document.getElementById('pdf-upload-preview').src = pdfReportImage;
+            document.getElementById('pdf-preview-container').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+};
+
+document.getElementById('generate-pdf-final-btn').onclick = () => {
+    generatePDF();
+};
+
+function generatePDF() {
+    document.getElementById('pdf-image-modal').classList.add('hidden');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('l', 'pt');
-    doc.text(`Inventario de la Unidad ${currentUnit}`, 40, 40);
+    
+    // Header
+    doc.setFontSize(18);
+    doc.text(`Reporte de Inventario - Unidad ${currentUnit}`, 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${new Date().toLocaleString()}`, 40, 55);
+
+    if (pdfReportImage) {
+        // Add the uploaded image (e.g., signature or logo) at the top right
+        doc.addImage(pdfReportImage, 'JPEG', 680, 20, 100, 50);
+    }
     
     const rows = currentInventory.map((item, i) => [
         i + 1, item.codigo, item.descripcion, item.ubicacion, item.marca, item.estado, item.revisado ? 'SI' : 'NO'
@@ -436,10 +476,13 @@ ELEMENTS.exportPdfBtn.onclick = () => {
     doc.autoTable({
         head: [['#', 'Código', 'Descripción', 'Ubicación', 'Marca', 'Estado', 'Rev']],
         body: rows,
-        startY: 60
+        startY: 80,
+        theme: 'striped',
+        headStyles: { fillStyle: '#ef4444' }
     });
+    
     doc.save(`inventario_${currentUnit}.pdf`);
-};
+}
 
 ELEMENTS.exportExcelBtn.onclick = () => {
     const ws = XLSX.utils.json_to_sheet(currentInventory);
