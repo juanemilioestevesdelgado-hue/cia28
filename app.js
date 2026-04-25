@@ -184,16 +184,17 @@ async function loadInventory() {
 function renderTable(data) {
     ELEMENTS.inventoryBody.innerHTML = '';
     data.sort((a, b) => a.codigo.localeCompare(b.codigo)).forEach((item, index) => {
+        // Main row
         const tr = document.createElement('tr');
         if (item.revisado) tr.classList.add('row-reviewed');
+        tr.id = `row-${item.codigo}`;
         
         tr.innerHTML = `
             <td style="text-align:center;">${index + 1}</td>
-            <td>
-                <div class="photo-placeholder" onclick="openPhotoModal('${item.codigo}')">
-                    <i class="ph ph-image"></i>
-                    <img id="img-${item.codigo}" src="${item.foto || ''}" style="display:${item.foto ? 'block' : 'none'}">
-                </div>
+            <td style="text-align:center;">
+                <button class="toggle-btn" onclick="togglePhotoRow('${item.codigo}')">
+                    <i class="ph ph-caret-down"></i>
+                </button>
             </td>
             <td><strong>${item.codigo}</strong></td>
             <td>${item.sicafi || '-'}</td>
@@ -221,8 +222,62 @@ function renderTable(data) {
             </td>
         `;
         ELEMENTS.inventoryBody.appendChild(tr);
+
+        // Expandable photo row
+        const photoRow = document.createElement('tr');
+        photoRow.id = `photo-row-${item.codigo}`;
+        photoRow.className = 'photo-row hidden';
+        photoRow.innerHTML = `
+            <td colspan="17">
+                <div class="photo-container" style="display:flex; flex-direction:column; gap:15px; padding:20px; background:#f8fafc;">
+                    <div style="display:flex; gap:15px; align-items:center;">
+                        <button onclick="uploadItemPhoto('${item.codigo}')" style="background:#eff6ff; color:#3b82f6; border:1px solid #bfdbfe; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:500; display:flex; align-items:center; gap:8px;">
+                            <i class="ph ph-camera"></i> Subir Fotografía
+                        </button>
+                        <button onclick="deleteItemPhoto('${item.codigo}')" style="background:#ef4444; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:500; display:flex; align-items:center; gap:8px;">
+                            <i class="ph ph-trash"></i> Borrar Foto
+                        </button>
+                    </div>
+                    <div id="preview-container-${item.codigo}" style="display:${item.foto ? 'block' : 'none'};">
+                        <img src="${item.foto || ''}" style="max-width:300px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); border:1px solid #e2e8f0;">
+                    </div>
+                </div>
+            </td>
+        `;
+        ELEMENTS.inventoryBody.appendChild(photoRow);
     });
 }
+
+window.togglePhotoRow = (codigo) => {
+    const row = document.getElementById(`photo-row-${codigo}`);
+    const btn = document.querySelector(`#row-${codigo} .toggle-btn`);
+    row.classList.toggle('hidden');
+    btn.classList.toggle('expanded');
+};
+
+window.uploadItemPhoto = (codigo) => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = e => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async () => {
+            const base64 = reader.result;
+            await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), { foto: base64 });
+            loadInventory();
+        };
+        reader.readAsDataURL(file);
+    };
+    fileInput.click();
+};
+
+window.deleteItemPhoto = async (codigo) => {
+    if (confirm("¿Eliminar la fotografía de este item?")) {
+        await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), { foto: null });
+        loadInventory();
+    }
+};
 
 function updateStats() {
     ELEMENTS.totalItems.innerText = currentInventory.length;
