@@ -153,22 +153,28 @@ ELEMENTS.changeUnitBtn.onclick = () => {
 
 ELEMENTS.logoutBtn.onclick = () => location.reload();
 
+function getColName() {
+    return currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
+}
+
 // --- INVENTORY LOGIC ---
 async function loadInventory() {
     ELEMENTS.inventoryBody.innerHTML = '<tr><td colspan="17" style="text-align:center; padding:20px;">Cargando inventario...</td></tr>';
     
-    const colRef = collection(db, `inventario_${currentUnit}`);
+    const colName = getColName();
+    const colRef = collection(db, colName);
     const snapshot = await getDocs(colRef);
     
     if (snapshot.empty) {
         // First time sync from local data
         currentInventory = (currentUnit === 'U-8' ? inventoryU8 : inventoryT8);
         for (const item of currentInventory) {
-            await setDoc(doc(db, `inventario_${currentUnit}`, item.codigo), {
+            await setDoc(doc(db, colName, item.codigo), {
                 ...item,
                 revisado: false,
                 comentarios: "",
                 estado: "",
+                historial: [],
                 ultimaRevision: "",
                 proximaRevision: ""
             });
@@ -256,6 +262,7 @@ window.togglePhotoRow = (codigo) => {
 };
 
 window.uploadItemPhoto = (codigo) => {
+    const collectionName = currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
@@ -264,7 +271,7 @@ window.uploadItemPhoto = (codigo) => {
         const reader = new FileReader();
         reader.onload = async () => {
             const base64 = reader.result;
-            await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), { foto: base64 });
+            await updateDoc(doc(db, collectionName, codigo), { foto: base64 });
             loadInventory();
         };
         reader.readAsDataURL(file);
@@ -273,8 +280,9 @@ window.uploadItemPhoto = (codigo) => {
 };
 
 window.deleteItemPhoto = async (codigo) => {
+    const collectionName = currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
     if (confirm("¿Eliminar la fotografía de este item?")) {
-        await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), { foto: null });
+        await updateDoc(doc(db, collectionName, codigo), { foto: null });
         loadInventory();
     }
 };
@@ -289,7 +297,7 @@ window.toggleReview = async (codigo, val) => {
         loadInventory();
         return;
     }
-    await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), { revisado: val });
+    await updateDoc(doc(db, getColName(), codigo), { revisado: val });
     addHistory(codigo, `Cambio estado revisión a: ${val ? 'REVISADO' : 'PENDIENTE'}`);
     loadInventory();
 };
@@ -303,7 +311,7 @@ window.openPhotoModal = (codigo) => {
         const reader = new FileReader();
         reader.onload = async () => {
             const base64 = reader.result;
-            await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), { foto: base64 });
+            await updateDoc(doc(db, getColName(), codigo), { foto: base64 });
             loadInventory();
         };
         reader.readAsDataURL(file);
@@ -352,15 +360,16 @@ document.getElementById('edit-item-form').onsubmit = async (e) => {
         comentarios: document.getElementById('edit-comentarios').value
     };
     
-    await updateDoc(doc(db, `inventario_${currentUnit}`, codigo), updates);
+    await updateDoc(doc(db, getColName(), codigo), updates);
     addHistory(codigo, "Edición manual de campos.");
     document.getElementById('edit-item-modal').classList.add('hidden');
     loadInventory();
 };
 
 window.deleteItem = async (codigo) => {
+    const collectionName = currentUnit === 'U-8' ? 'inventario_u8' : 'inventario_t8';
     if (confirm(`¿Eliminar definitivamente el item ${codigo}?`)) {
-        await deleteDoc(doc(db, `inventario_${currentUnit}`, codigo));
+        await deleteDoc(doc(db, collectionName, codigo));
         loadInventory();
     }
 };
@@ -383,14 +392,14 @@ document.getElementById('add-item-form').onsubmit = async (e) => {
         revisado: false,
         comentarios: ""
     };
-    await setDoc(doc(db, `inventario_${currentUnit}`, codigo), item);
+    await setDoc(doc(db, getColName(), codigo), item);
     document.getElementById('add-item-modal').classList.add('hidden');
     loadInventory();
 };
 
 // --- HISTORY ---
 async function addHistory(codigo, accion) {
-    const historyRef = collection(db, `inventario_${currentUnit}`, codigo, "historial");
+    const historyRef = collection(db, getColName(), codigo, "historial");
     await setDoc(doc(historyRef), {
         accion: accion,
         fecha: new Date().toLocaleString(),
@@ -403,7 +412,7 @@ window.showHistory = async (codigo) => {
     list.innerHTML = "Cargando...";
     document.getElementById('history-modal').classList.remove('hidden');
     
-    const snap = await getDocs(collection(db, `inventario_${currentUnit}`, codigo, "historial"));
+    const snap = await getDocs(collection(db, getColName(), codigo, "historial"));
     list.innerHTML = "";
     if (snap.empty) {
         list.innerHTML = "<p>No hay historial para este item.</p>";
