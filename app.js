@@ -483,49 +483,74 @@ ELEMENTS.exportPdfBtn.onclick = () => generatePDF();
 
 function generatePDF() {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('l', 'pt');
+    const doc = new jsPDF('l', 'pt', 'a4');
     
-    // Header
-    doc.setFontSize(18);
-    doc.text(`Reporte de Inventario - Unidad ${currentUnit}`, 40, 40);
+    // Header Title
+    doc.setFontSize(22);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Inventario 5ta Brigada`, 40, 45);
+    
     doc.setFontSize(10);
-    doc.text(`Fecha: ${new Date().toLocaleString()}`, 40, 55);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Unidad: ${currentUnit} | Fecha: ${new Date().toLocaleString()}`, 40, 65);
     
     const rows = currentInventory.map((item, i) => [
+        '', // Foto
         i + 1, 
-        '', // Placeholder for image
         item.codigo, 
+        item.sicafi || '-',
+        item.pf || '-',
         item.descripcion, 
-        item.ubicacion, 
-        item.marca, 
-        item.estado, 
-        item.revisado ? 'SI' : 'NO'
+        item.ubicacion || '-', 
+        item.marca || '-', 
+        item.modelo || '-',
+        item.serie || '-',
+        item.estado || '-',
+        item.revisado ? 'Sí' : 'No',
+        item.comentarios || ''
     ]);
     
     doc.autoTable({
-        head: [['#', 'Foto', 'Código', 'Descripción', 'Ubicación', 'Marca', 'Estado', 'Rev']],
+        head: [['Foto', '#', 'Código', 'SICAFI', 'PF', 'Descripción', 'Ubicación', 'Marca', 'Modelo', 'Serie', 'Estado', 'Revisado', 'Comentarios']],
         body: rows,
-        startY: 70,
-        theme: 'striped',
-        headStyles: { fillColor: [239, 68, 68] },
+        startY: 85,
+        theme: 'grid',
+        headStyles: { 
+            fillColor: [128, 0, 0], // Dark red
+            textColor: 255,
+            fontSize: 8,
+            halign: 'center'
+        },
+        styles: {
+            fontSize: 7,
+            cellPadding: 5,
+            minCellHeight: 60,
+            valign: 'middle'
+        },
         columnStyles: {
-            1: { cellWidth: 50 } // Width for photo column
+            0: { cellWidth: 80 }, // Foto
+            1: { cellWidth: 25 }, // #
+            2: { cellWidth: 45 }, // Código
+            3: { cellWidth: 45 }, // SICAFI
+            4: { cellWidth: 45 }, // PF
+            5: { cellWidth: 100 }, // Descripción
+            6: { cellWidth: 60 }, // Ubicación
+            12: { cellWidth: 80 } // Comentarios
         },
         didDrawCell: (data) => {
-            if (data.section === 'body' && data.column.index === 1) {
+            if (data.section === 'body' && data.column.index === 0) {
                 const item = currentInventory[data.row.index];
                 if (item && item.foto) {
                     try {
-                        doc.addImage(item.foto, 'JPEG', data.cell.x + 5, data.cell.y + 2, 40, 30);
+                        const imgSize = 50;
+                        const x = data.cell.x + (data.cell.width - imgSize) / 2;
+                        const y = data.cell.y + (data.cell.height - imgSize) / 2;
+                        doc.addImage(item.foto, 'JPEG', x, y, imgSize, imgSize);
                     } catch (e) {
                         console.error("Error adding image to PDF", e);
                     }
                 }
             }
-        },
-        styles: {
-            minCellHeight: 35,
-            valign: 'middle'
         }
     });
     
