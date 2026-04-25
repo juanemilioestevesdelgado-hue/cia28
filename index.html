@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/jpeg" href="logo.jpeg">
+    <title>Inventario U-8 / T-8 V32</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts for modern typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons (Modern & sleek icons) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- SheetJS for Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- jsPDF and AutoTable for PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- Import map for Firebase -->
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js",
+          "firebase/analytics": "https://www.gstatic.com/firebasejs/10.9.0/firebase-analytics.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js"
+        }
+      }
+    </script>
+</head>
+
+<body>
+    <!-- Auth Container -->
+    <div id="auth-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px;">
+        <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center;">
+            <img src="logo.jpeg" alt="Logo" style="width: 100px; margin-bottom: 20px; border-radius: 8px;">
+            <h2 style="margin-bottom: 20px;">Acceso al Sistema</h2>
+            
+            <div style="display: flex; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0;">
+                <button id="tab-login" style="flex: 1; padding: 10px; border: none; background: none; font-weight: bold; color: var(--accent); border-bottom: 3px solid var(--accent); cursor: pointer;">Iniciar Sesión</button>
+                <button id="tab-register" style="flex: 1; padding: 10px; border: none; background: none; font-weight: bold; color: #64748b; cursor: pointer;">Registrarse</button>
+            </div>
+
+            <form id="login-form" style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="text" id="login-username" placeholder="Usuario o Placa" required style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit;">
+                <input type="password" id="login-password" placeholder="Contraseña" required style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit;">
+                <button type="submit" style="padding: 12px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="ph ph-sign-in"></i> Ingresar</button>
+            </form>
+
+            <form id="register-form" style="display: none; flex-direction: column; gap: 15px;">
+                <input type="text" id="register-username" placeholder="Usuario o Placa" required style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit;">
+                <input type="password" id="register-password" placeholder="Contraseña" required style="padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit;">
+                <button type="submit" style="padding: 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="ph ph-user-plus"></i> Solicitar Registro</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Unit Selection Modal -->
+    <div id="unit-selection-container" style="display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px;">
+        <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center;">
+            <img src="logo.jpeg" alt="Logo" style="width: 120px; margin-bottom: 20px; border-radius: 8px;">
+            <h2 style="margin-bottom: 10px;">Seleccione la Unidad</h2>
+            <p style="color: #64748b; margin-bottom: 30px;">Elija el inventario que desea gestionar</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <button id="select-u8" style="padding: 20px; background: #f1f5f9; border: 2px solid #e2e8f0; border-radius: 12px; cursor: pointer; transition: all 0.2s;">
+                    <i class="ph ph-truck" style="font-size: 2.5rem; color: var(--accent); margin-bottom: 10px; display: block;"></i>
+                    <span style="font-weight: bold; font-size: 1.2rem; display: block;">U-8</span>
+                </button>
+                <button id="select-t8" style="padding: 20px; background: #f1f5f9; border: 2px solid #e2e8f0; border-radius: 12px; cursor: pointer; transition: all 0.2s;">
+                    <i class="ph ph-truck" style="font-size: 2.5rem; color: #ef4444; margin-bottom: 10px; display: block;"></i>
+                    <span style="font-weight: bold; font-size: 1.2rem; display: block;">T-8</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-container" style="display: none;">
+        <header class="header">
+            <div class="header-content" style="display: flex; align-items: center; gap: 1.5rem;">
+                <img src="logo.jpeg" alt="Logo" style="width: 70px; height: auto; border-radius: 8px;">
+                <div>
+                    <h1 id="main-title">INVENTARIO</h1>
+                    <p id="unit-subtitle">Gestión y revisión de equipos</p>
+                    <div style="margin-top: 5px; display: flex; gap: 10px;">
+                        <button id="change-unit-btn" style="background: none; border: 1px solid var(--accent); color: var(--accent); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;"><i class="ph ph-arrows-left-right"></i> Cambiar Unidad</button>
+                        <button id="logout-btn" style="background: none; border: 1px solid #ef4444; color: #ef4444; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;"><i class="ph ph-sign-out"></i> Salir</button>
+                        <button id="inbox-btn" style="display: none; background: #3b82f6; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;"><i class="ph ph-tray"></i> Buzón <span id="inbox-badge" style="background: #ef4444; border-radius: 50%; padding: 0 4px; font-size: 0.7rem; margin-left: 4px;">0</span></button>
+                        <button id="manage-users-btn" style="display: none; background: #10b981; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;"><i class="ph ph-users"></i> Usuarios</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-container" style="flex: 1; max-width: 350px; margin: 0 1rem; position: relative;">
+                <i class="ph ph-magnifying-glass" style="position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary);"></i>
+                <input type="text" id="search-input" placeholder="Buscar por nombre o código..." style="width: 100%; padding: 0.6rem 1rem 0.6rem 2.2rem; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--bg-primary); font-family: inherit; font-size: 0.9rem;">
+            </div>
+            <div class="stats">
+                <div class="stat-card">
+                    <span class="stat-value" id="total-items">0</span>
+                    <span class="stat-label">Total Items</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="reviewed-items">0</span>
+                    <span class="stat-label">Revisados</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+                        <button id="export-pdf-btn" class="upload-btn" style="height: fit-content; background: #eab308; color: white; border: 2px solid #ca8a04;">
+                            <i class="ph ph-file-pdf"></i> PDF
+                        </button>
+                        <button id="export-excel-btn" class="upload-btn" style="height: fit-content; background: #22c55e; color: white; border: 2px solid #16a34a;">
+                            <i class="ph ph-file-xls"></i> Excel
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+                        <button id="add-item-btn" class="upload-btn" style="height: fit-content; background: #10b981; color: white; border: 2px solid #059669;">
+                            <i class="ph ph-plus"></i> Añadir Item
+                        </button>
+                        <button id="sync-btn" class="upload-btn" style="height: fit-content; background: var(--accent); color: white;">
+                            <i class="ph ph-arrows-clockwise"></i> Sincronizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="ai-container" style="width: 100%; background: white; border-bottom: 1px solid var(--glass-border); display: flex; flex-direction: column; overflow: hidden;">
+                <div style="background: var(--accent); color: white; padding: 12px 20px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="ph ph-robot" style="font-size: 1.3rem;"></i>
+                        Asistente Inteligente - Cerebro Logístico
+                    </div>
+                </div>
+                
+                <div id="ai-messages" style="max-height: 0px; padding: 0; overflow-y: auto; background: #f8fafc; transition: all 0.3s ease; display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Messages will appear here -->
+                </div>
+                
+                <div style="padding: 15px 20px; background: white; display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="ai-input" placeholder="¿Cuántos tramos hay? o busca por ubicación..." style="flex: 1; padding: 10px 15px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; outline: none;">
+                    <button id="send-ai" style="background: var(--accent); color: white; border: none; border-radius: 8px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                        <i class="ph ph-paper-plane-right" style="font-size: 1.2rem;"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-container" style="overflow-x: auto; width: 100%;">
+                <table id="inventory-table" style="min-width: 1400px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px; text-align: center;">#</th>
+                            <th style="width: 60px;">FOTO</th>
+                            <th>Código</th>
+                            <th>SICAFI</th>
+                            <th>PF</th>
+                            <th>Descripción</th>
+                            <th>Ubicación</th>
+                            <th>Marca</th>
+                            <th>Modelo</th>
+                            <th>Serie</th>
+                            <th>Estado</th>
+                            <th>Última Rev.</th>
+                            <th>Próxima Rev.</th>
+                            <th class="action-column">Revisión</th>
+                            <th class="action-column">Comentarios</th>
+                            <th class="action-column">Historial</th>
+                            <th class="action-column">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-body">
+                        <!-- Rows populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="image-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal"><i class="ph ph-x"></i></span>
+            <img id="modal-image" src="" alt="Vista previa">
+        </div>
+    </div>
+
+    <div id="add-item-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; padding: 20px;">
+            <span class="close-add-modal" style="float: right; cursor: pointer;"><i class="ph ph-x"></i></span>
+            <h2>Añadir Nuevo Item</h2>
+            <form id="add-item-form" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="text" id="add-codigo" placeholder="Código" required style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-sicafi" placeholder="SICAFI" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-pf" placeholder="PF" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-descripcion" placeholder="Descripción" required style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-ubicacion" placeholder="Ubicación" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-marca" placeholder="Marca" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-modelo" placeholder="Modelo" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="add-serie" placeholder="Serie" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <button type="submit" class="upload-btn" style="background: #10b981; color: white; justify-content: center;">Guardar Item</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-item-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; padding: 20px;">
+            <span class="close-edit-modal" style="float: right; cursor: pointer;"><i class="ph ph-x"></i></span>
+            <h2>Editar Item</h2>
+            <form id="edit-item-form" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+                <input type="hidden" id="edit-original-codigo">
+                <input type="text" id="edit-codigo" disabled style="padding: 10px; background: #f3f4f6; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-sicafi" placeholder="SICAFI" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-pf" placeholder="PF" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-descripcion" placeholder="Descripción" required style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-ubicacion" placeholder="Ubicación" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-marca" placeholder="Marca" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-modelo" placeholder="Modelo" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" id="edit-serie" placeholder="Serie" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                <select id="edit-estado" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">Estado...</option>
+                    <option value="bueno">Bueno</option>
+                    <option value="malo">Malo</option>
+                    <option value="regular">Regular</option>
+                </select>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;"><label style="font-size: 0.8rem;">Última Rev.</label><input type="date" id="edit-ultima-revision" style="width: 100%; padding: 8px;"></div>
+                    <div style="flex: 1;"><label style="font-size: 0.8rem;">Próxima Rev.</label><input type="date" id="edit-proxima-revision" style="width: 100%; padding: 8px;"></div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="edit-revisado" style="width: 20px; height: 20px;">
+                    <label>¿Revisado?</label>
+                </div>
+                <textarea id="edit-comentarios" placeholder="Comentarios..." style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+                <button type="submit" class="upload-btn" style="background: #3b82f6; color: white; justify-content: center;">Actualizar Item</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="history-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; padding: 20px;">
+            <span class="close-history-modal" style="float: right; cursor: pointer;"><i class="ph ph-x"></i></span>
+            <h2>Historial de Cambios</h2>
+            <div id="history-list" style="margin-top: 15px; max-height: 300px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <div id="manage-users-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; padding: 20px;">
+            <span class="close-manage-users-modal" style="float: right; cursor: pointer;"><i class="ph ph-x"></i></span>
+            <h2>Administrar Usuarios</h2>
+            <div id="approved-users-list" style="margin-top: 15px; max-height: 200px; overflow-y: auto;"></div>
+            <h3 style="margin-top: 20px;">Crear Nuevo Usuario</h3>
+            <form id="commander-register-form" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                <input type="text" id="cmd-reg-user" placeholder="Usuario" required style="padding: 10px;">
+                <input type="text" id="cmd-reg-pass" placeholder="Contraseña" required style="padding: 10px;">
+                <button type="submit" style="padding: 10px; background: #10b981; color: white; border: none; border-radius: 4px;">Crear</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="inbox-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; padding: 20px;">
+            <span class="close-inbox-modal" style="float: right; cursor: pointer;"><i class="ph ph-x"></i></span>
+            <h2>Buzón de Solicitudes</h2>
+            <div id="inbox-list" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js?v=32"></script>
+</body>
+
+</html>
