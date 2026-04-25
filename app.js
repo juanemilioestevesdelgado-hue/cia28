@@ -479,37 +479,9 @@ function appendMessage(role, text) {
 }
 
 // --- EXPORT & SYNC ---
-let pdfReportImage = null;
-
-ELEMENTS.exportPdfBtn.onclick = () => {
-    document.getElementById('pdf-image-modal').classList.remove('hidden');
-    pdfReportImage = null;
-    document.getElementById('pdf-preview-container').style.display = 'none';
-    document.getElementById('pdf-image-input').value = '';
-};
-
-document.querySelector('.close-pdf-modal').onclick = () => document.getElementById('pdf-image-modal').classList.add('hidden');
-document.getElementById('cancel-pdf-btn').onclick = () => generatePDF();
-
-document.getElementById('pdf-image-input').onchange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            pdfReportImage = event.target.result;
-            document.getElementById('pdf-upload-preview').src = pdfReportImage;
-            document.getElementById('pdf-preview-container').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-    }
-};
-
-document.getElementById('generate-pdf-final-btn').onclick = () => {
-    generatePDF();
-};
+ELEMENTS.exportPdfBtn.onclick = () => generatePDF();
 
 function generatePDF() {
-    document.getElementById('pdf-image-modal').classList.add('hidden');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('l', 'pt');
     
@@ -518,22 +490,43 @@ function generatePDF() {
     doc.text(`Reporte de Inventario - Unidad ${currentUnit}`, 40, 40);
     doc.setFontSize(10);
     doc.text(`Fecha: ${new Date().toLocaleString()}`, 40, 55);
-
-    if (pdfReportImage) {
-        // Add the uploaded image (e.g., signature or logo) at the top right
-        doc.addImage(pdfReportImage, 'JPEG', 680, 20, 100, 50);
-    }
     
     const rows = currentInventory.map((item, i) => [
-        i + 1, item.codigo, item.descripcion, item.ubicacion, item.marca, item.estado, item.revisado ? 'SI' : 'NO'
+        i + 1, 
+        '', // Placeholder for image
+        item.codigo, 
+        item.descripcion, 
+        item.ubicacion, 
+        item.marca, 
+        item.estado, 
+        item.revisado ? 'SI' : 'NO'
     ]);
     
     doc.autoTable({
-        head: [['#', 'Código', 'Descripción', 'Ubicación', 'Marca', 'Estado', 'Rev']],
+        head: [['#', 'Foto', 'Código', 'Descripción', 'Ubicación', 'Marca', 'Estado', 'Rev']],
         body: rows,
-        startY: 80,
+        startY: 70,
         theme: 'striped',
-        headStyles: { fillStyle: '#ef4444' }
+        headStyles: { fillColor: [239, 68, 68] },
+        columnStyles: {
+            1: { cellWidth: 50 } // Width for photo column
+        },
+        didDrawCell: (data) => {
+            if (data.section === 'body' && data.column.index === 1) {
+                const item = currentInventory[data.row.index];
+                if (item && item.foto) {
+                    try {
+                        doc.addImage(item.foto, 'JPEG', data.cell.x + 5, data.cell.y + 2, 40, 30);
+                    } catch (e) {
+                        console.error("Error adding image to PDF", e);
+                    }
+                }
+            }
+        },
+        styles: {
+            minCellHeight: 35,
+            valign: 'middle'
+        }
     });
     
     doc.save(`inventario_${currentUnit}.pdf`);
