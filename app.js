@@ -425,11 +425,11 @@ window.toggleReview = async (codigo, val) => {
         }
         const updates = {
             revisado: true,
-            ultimaRevision: new Date().toLocaleDateString(),
+            ultimaRevision: new Date().toLocaleString(),
             revisadoPor: currentUser.username
         };
         await updateDoc(doc(db, getColName(), codigo), updates);
-        addHistory(codigo, `Item BLOQUEADO y REVISADO por ${currentUser.username}`);
+        addHistory(codigo, `Item BLOQUEADO y REVISADO por ${currentUser.username} el ${updates.ultimaRevision}`);
     } else {
         if (!confirm("¿Desea DESBLOQUEAR este item para permitir ediciones?")) {
             renderTable(currentInventory); // Reset UI
