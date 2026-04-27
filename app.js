@@ -157,34 +157,39 @@ function getColName() {
     return 'inventario_cia28';
 }
 
+let inventoryListener = null;
+
 // --- INVENTORY LOGIC ---
 async function loadInventory() {
-    ELEMENTS.inventoryBody.innerHTML = '<tr><td colspan="17" style="text-align:center; padding:20px;">Cargando inventario...</td></tr>';
+    if (inventoryListener) inventoryListener(); // Detener listener previo si existe
+    
+    ELEMENTS.inventoryBody.innerHTML = '<tr><td colspan="17" style="text-align:center; padding:20px;">Sincronizando en tiempo real...</td></tr>';
     
     const colName = getColName();
     const colRef = collection(db, colName);
-    const snapshot = await getDocs(colRef);
     
-    if (snapshot.empty) {
-        // First time sync from local data
-        currentInventory = inventoryU8;
-        for (const item of currentInventory) {
+    // Verificación inicial para sincronizar si está vacío
+    const initialSnap = await getDocs(colRef);
+    if (initialSnap.empty) {
+        for (const item of inventoryU8) {
             await setDoc(doc(db, colName, item.codigo), {
                 ...item,
                 revisado: false,
                 comentarios: "",
                 estado: "",
-                historial: [],
                 ultimaRevision: "",
-                proximaRevision: ""
+                proximaRevision: "",
+                revisadoPor: ""
             });
         }
-        renderTable(currentInventory);
-    } else {
+    }
+
+    // Listener en tiempo real: Actualiza la UI automáticamente al detectar cambios en Firebase
+    inventoryListener = onSnapshot(colRef, (snapshot) => {
         currentInventory = snapshot.docs.map(doc => doc.data());
         renderTable(currentInventory);
-    }
-    updateStats();
+        updateStats();
+    });
 }
 
 function renderTable(data) {
@@ -300,7 +305,6 @@ window.uploadItemPhoto = (codigo) => {
         reader.onload = async () => {
             const base64 = reader.result;
             await updateDoc(doc(db, collectionName, codigo), { foto: base64 });
-            loadInventory();
         };
         reader.readAsDataURL(file);
     };
@@ -311,7 +315,6 @@ window.deleteItemPhoto = async (codigo) => {
     const collectionName = getColName();
     if (confirm("¿Eliminar la fotografía de este item?")) {
         await updateDoc(doc(db, collectionName, codigo), { foto: null });
-        loadInventory();
     }
 };
 
@@ -323,7 +326,7 @@ function updateStats() {
 window.toggleReview = async (codigo, val) => {
     if (val) {
         if (!confirm("¿Desea BLOQUEAR este item y marcarlo como revisado? No podrá editarlo hasta desbloquearlo.")) {
-            loadInventory();
+            renderTable(currentInventory); // Reset UI
             return;
         }
         const updates = {
@@ -335,13 +338,13 @@ window.toggleReview = async (codigo, val) => {
         addHistory(codigo, `Item BLOQUEADO y REVISADO por ${currentUser.username}`);
     } else {
         if (!confirm("¿Desea DESBLOQUEAR este item para permitir ediciones?")) {
-            loadInventory();
+            renderTable(currentInventory); // Reset UI
             return;
         }
         await updateDoc(doc(db, getColName(), codigo), { revisado: false });
         addHistory(codigo, `Item DESBLOQUEADO por ${currentUser.username}`);
     }
-    loadInventory();
+    // No es necesario llamar a loadInventory() porque onSnapshot detectará el cambio y actualizará la UI
 };
 
 window.openPhotoModal = (codigo) => {
@@ -405,14 +408,12 @@ document.getElementById('edit-item-form').onsubmit = async (e) => {
     await updateDoc(doc(db, getColName(), codigo), updates);
     addHistory(codigo, "Edición manual de campos.");
     document.getElementById('edit-item-modal').classList.add('hidden');
-    loadInventory();
 };
 
 window.deleteItem = async (codigo) => {
     const collectionName = getColName();
     if (confirm(`¿Eliminar definitivamente el item ${codigo}?`)) {
         await deleteDoc(doc(db, collectionName, codigo));
-        loadInventory();
     }
 };
 
@@ -436,7 +437,6 @@ document.getElementById('add-item-form').onsubmit = async (e) => {
     };
     await setDoc(doc(db, getColName(), codigo), item);
     document.getElementById('add-item-modal').classList.add('hidden');
-    loadInventory();
 };
 
 // --- HISTORY ---
