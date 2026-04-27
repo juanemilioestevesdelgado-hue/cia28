@@ -217,13 +217,13 @@ async function loadInventory() {
         
         // Si hay cambios pero la tabla está vacía o el número de documentos cambió, re-render total
         if (currentInventory.length === 0 || changes.length > 5 || snapshot.size !== currentInventory.length) {
-            currentInventory = snapshot.docs.map(doc => doc.data());
+            currentInventory = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             renderTable(currentInventory);
         } else {
             // Actualización incremental para evitar el "refresco" visual
             changes.forEach(change => {
-                const data = change.doc.data();
-                const idx = currentInventory.findIndex(i => i.codigo === data.codigo);
+                const data = { ...change.doc.data(), id: change.doc.id };
+                const idx = currentInventory.findIndex(i => i.id === data.id);
                 if (idx !== -1) currentInventory[idx] = data;
                 
                 if (change.type === "modified") {
@@ -236,7 +236,7 @@ async function loadInventory() {
 }
 
 function updateRowUI(item) {
-    const row = document.getElementById(`row-${item.codigo}`);
+    const row = document.getElementById(`row-${item.id}`);
     if (!row) return;
 
     // Actualizar clases
@@ -296,7 +296,7 @@ function renderTable(data) {
         // Main row
         const tr = document.createElement('tr');
         if (item.revisado) tr.classList.add('row-reviewed');
-        tr.id = `row-${item.codigo}`;
+        tr.id = `row-${item.id}`;
         
         const lockAttr = item.revisado ? 'disabled' : '';
         const revisionInfo = `
@@ -308,7 +308,7 @@ function renderTable(data) {
         tr.innerHTML = `
             <td style="text-align:center;">${index + 1}</td>
             <td style="text-align:center;">
-                <button class="toggle-btn" onclick="togglePhotoRow('${item.codigo}')">
+                <button class="toggle-btn" onclick="togglePhotoRow('${item.id}')">
                     <i class="ph ph-caret-down"></i>
                 </button>
             </td>
@@ -321,7 +321,7 @@ function renderTable(data) {
             <td>${item.modelo || '-'}</td>
             <td>${item.serie || '-'}</td>
             <td style="text-align:center;">
-                <select ${lockAttr} class="status-select status-${item.estado || 'default'}" onchange="updateItemInline('${item.codigo}', 'estado', this.value)">
+                <select ${lockAttr} class="status-select status-${item.estado || 'default'}" onchange="updateItemInline('${item.id}', 'estado', this.value)">
                     <option value="">Seleccionar...</option>
                     <option value="bueno" ${item.estado === 'bueno' ? 'selected' : ''}>Bueno</option>
                     <option value="malo" ${item.estado === 'malo' ? 'selected' : ''}>Malo</option>
@@ -331,23 +331,23 @@ function renderTable(data) {
             </td>
             <td style="text-align:center;">${revisionInfo}</td>
             <td>
-                <input ${lockAttr} type="date" value="${item.proximaRevision || ''}" onchange="updateItemInline('${item.codigo}', 'proximaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px; font-size:0.85rem;">
+                <input ${lockAttr} type="date" value="${item.proximaRevision || ''}" onchange="updateItemInline('${item.id}', 'proximaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px; font-size:0.85rem;">
             </td>
             <td class="action-column" style="text-align:center;">
                 <div class="checkbox-wrapper">
-                    <input type="checkbox" class="custom-checkbox" ${item.revisado ? 'checked' : ''} onchange="toggleReview('${item.codigo}', this.checked)">
+                    <input type="checkbox" class="custom-checkbox" ${item.revisado ? 'checked' : ''} onchange="toggleReview('${item.id}', this.checked)">
                 </div>
             </td>
             <td class="action-column">
-                <textarea ${lockAttr} class="comment-input" onblur="updateItemInline('${item.codigo}', 'comentarios', this.value)" placeholder="Agregar comentarios..." style="min-height:40px; font-size:0.85rem;">${item.comentarios || ''}</textarea>
+                <textarea ${lockAttr} class="comment-input" onblur="updateItemInline('${item.id}', 'comentarios', this.value)" placeholder="Agregar comentarios..." style="min-height:40px; font-size:0.85rem;">${item.comentarios || ''}</textarea>
             </td>
             <td class="action-column" style="text-align:center;">
-                <button class="btn-icon" onclick="showHistory('${item.codigo}')"><i class="ph ph-clock-counter-clockwise"></i></button>
+                <button class="btn-icon" onclick="showHistory('${item.id}')"><i class="ph ph-clock-counter-clockwise"></i></button>
             </td>
             <td class="action-column">
                 <div style="display:flex; gap:5px;">
-                    <button ${lockAttr} class="btn-icon" onclick="editItem('${item.codigo}')"><i class="ph ph-pencil"></i></button>
-                    ${currentUser.role === 'commander' ? `<button class="btn-icon text-red" onclick="deleteItem('${item.codigo}')"><i class="ph ph-trash"></i></button>` : ''}
+                    <button ${lockAttr} class="btn-icon" onclick="editItem('${item.id}')"><i class="ph ph-pencil"></i></button>
+                    ${currentUser.role === 'commander' ? `<button class="btn-icon text-red" onclick="deleteItem('${item.id}')"><i class="ph ph-trash"></i></button>` : ''}
                 </div>
             </td>
         `;
@@ -423,10 +423,11 @@ function updateStats() {
     ELEMENTS.reviewedItems.innerText = currentInventory.filter(i => i.revisado).length;
 }
 
-window.toggleReview = async (codigo, val) => {
+window.toggleReview = async (id, val) => {
     if (val) {
         if (!confirm("¿Desea BLOQUEAR este item y marcarlo como revisado? No podrá editarlo hasta desbloquearlo.")) {
-            renderTable(currentInventory); // Reset UI
+            const checkbox = document.querySelector(`#row-${id} .custom-checkbox`);
+            if (checkbox) checkbox.checked = false;
             return;
         }
         const updates = {
@@ -434,21 +435,21 @@ window.toggleReview = async (codigo, val) => {
             ultimaRevision: new Date().toLocaleString(),
             revisadoPor: currentUser.username
         };
-        await updateDoc(doc(db, getColName(), codigo), updates);
-        addHistory(codigo, `Item BLOQUEADO y REVISADO por ${currentUser.username} el ${updates.ultimaRevision}`);
+        await updateDoc(doc(db, getColName(), id), updates);
+        addHistory(id, `Item BLOQUEADO y REVISADO por ${currentUser.username} el ${updates.ultimaRevision}`);
     } else {
         if (!confirm("¿Desea DESBLOQUEAR este item para permitir ediciones?")) {
-            renderTable(currentInventory); // Reset UI
+            const checkbox = document.querySelector(`#row-${id} .custom-checkbox`);
+            if (checkbox) checkbox.checked = true;
             return;
         }
-        await updateDoc(doc(db, getColName(), codigo), { 
+        await updateDoc(doc(db, getColName(), id), { 
             revisado: false,
             ultimaRevision: "",
             revisadoPor: ""
         });
-        addHistory(codigo, `Item DESBLOQUEADO y REVISIÓN REINICIADA por ${currentUser.username}`);
+        addHistory(id, `Item DESBLOQUEADO y REVISIÓN REINICIADA por ${currentUser.username}`);
     }
-    // No es necesario llamar a loadInventory() porque onSnapshot detectará el cambio y actualizará la UI
 };
 
 window.openPhotoModal = (codigo) => {
