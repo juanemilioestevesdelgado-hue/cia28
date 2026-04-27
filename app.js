@@ -4,13 +4,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB6ExzbxT6vWH7a195TdWD8yv7xNDjbkBc",
-  authDomain: "cia28-dff38.firebaseapp.com",
-  projectId: "cia28-dff38",
-  storageBucket: "cia28-dff38.firebasestorage.app",
-  messagingSenderId: "127192013068",
-  appId: "1:127192013068:web:bf2f00eba74c6037a0d129",
-  measurementId: "G-D2GSQC0MH4"
+  apiKey: "AIzaSyBpGkDT1Fz-XqY_H7clwtHYiwyeCsWvrQk",
+  authDomain: "inventario-u-t-8.firebaseapp.com",
+  projectId: "inventario-u-t-8",
+  storageBucket: "inventario-u-t-8.firebasestorage.app",
+  messagingSenderId: "903523003246",
+  appId: "1:903523003246:web:bd4cbd336d7f01ac46ef7f",
+  measurementId: "G-LFWZTZFGRR"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -124,7 +124,8 @@ function showUnitSelection() {
     ELEMENTS.unitSelection.style.display = 'flex';
 }
 
-document.getElementById('select-u8').onclick = () => startApp('CIA-28');
+document.getElementById('select-u8').onclick = () => startApp('U-8');
+document.getElementById('select-t8').onclick = () => startApp('T-8');
 
 function startApp(unit) {
     currentUnit = unit;
@@ -154,7 +155,7 @@ ELEMENTS.changeUnitBtn.onclick = () => {
 ELEMENTS.logoutBtn.onclick = () => location.reload();
 
 function getColName() {
-    return 'inventario_cia28';
+    return currentUnit === 'T-8' ? 'inventario_t8' : 'inventario_u8';
 }
 
 let inventoryListener = null;
@@ -186,9 +187,80 @@ async function loadInventory() {
 
     // Listener en tiempo real: Actualiza la UI automáticamente al detectar cambios en Firebase
     inventoryListener = onSnapshot(colRef, (snapshot) => {
-        currentInventory = snapshot.docs.map(doc => doc.data());
-        renderTable(currentInventory);
+        const changes = snapshot.docChanges();
+        
+        // Si hay cambios pero la tabla está vacía o el número de documentos cambió, re-render total
+        if (currentInventory.length === 0 || changes.length > 5 || snapshot.size !== currentInventory.length) {
+            currentInventory = snapshot.docs.map(doc => doc.data());
+            renderTable(currentInventory);
+        } else {
+            // Actualización incremental para evitar el "refresco" visual
+            changes.forEach(change => {
+                const data = change.doc.data();
+                const idx = currentInventory.findIndex(i => i.codigo === data.codigo);
+                if (idx !== -1) currentInventory[idx] = data;
+                
+                if (change.type === "modified") {
+                    updateRowUI(data);
+                }
+            });
+        }
         updateStats();
+    });
+}
+
+function updateRowUI(item) {
+    const row = document.getElementById(`row-${item.codigo}`);
+    if (!row) return;
+
+    // Actualizar clases
+    if (item.revisado) row.classList.add('row-reviewed');
+    else row.classList.remove('row-reviewed');
+
+    // Actualizar celdas críticas sin reconstruir toda la fila
+    const cells = row.cells;
+    
+    // Estado (select)
+    const select = row.querySelector('.status-select');
+    if (select) {
+        select.value = item.estado || "";
+        select.className = `status-select status-${item.estado || 'default'}`;
+        select.disabled = item.revisado;
+    }
+
+    // Última Revisión
+    const revCell = cells[11];
+    if (revCell) {
+        revCell.innerHTML = `
+            <div style="font-size:0.75rem; color:${item.revisado ? '#059669' : '#64748b'}; font-weight:600;">
+                ${item.ultimaRevision || '-'}
+                ${item.revisadoPor ? `<br><span style="color:#64748b; font-weight:400;">Por: ${item.revisadoPor}</span>` : ''}
+            </div>`;
+    }
+
+    // Próxima Revisión
+    const dateInput = row.querySelector('input[type="date"]');
+    if (dateInput) {
+        dateInput.value = item.proximaRevision || "";
+        dateInput.disabled = item.revisado;
+    }
+
+    // Checkbox
+    const checkbox = row.querySelector('.custom-checkbox');
+    if (checkbox) checkbox.checked = item.revisado;
+
+    // Comentarios
+    const textarea = row.querySelector('.comment-input');
+    if (textarea) {
+        textarea.value = item.comentarios || "";
+        textarea.disabled = item.revisado;
+    }
+
+    // Botones de acción
+    row.querySelectorAll('.btn-icon').forEach(btn => {
+        if (!btn.classList.contains('text-red')) { // No deshabilitar borrar para el comandante si se desea
+             btn.disabled = item.revisado;
+        }
     });
 }
 
@@ -201,9 +273,11 @@ function renderTable(data) {
         tr.id = `row-${item.codigo}`;
         
         const lockAttr = item.revisado ? 'disabled' : '';
-        const revisionInfo = item.revisado ? 
-            `<div style="font-size:0.75rem; color:#059669; font-weight:600;">${item.ultimaRevision || '-'}<br><span style="color:#64748b; font-weight:400;">Por: ${item.revisadoPor || 'S/U'}</span></div>` : 
-            `-`;
+        const revisionInfo = `
+            <div style="font-size:0.75rem; color:${item.revisado ? '#059669' : '#64748b'}; font-weight:600;">
+                ${item.ultimaRevision || '-'}
+                ${item.revisadoPor ? `<br><span style="color:#64748b; font-weight:400;">Por: ${item.revisadoPor}</span>` : ''}
+            </div>`;
 
         tr.innerHTML = `
             <td style="text-align:center;">${index + 1}</td>
@@ -341,8 +415,12 @@ window.toggleReview = async (codigo, val) => {
             renderTable(currentInventory); // Reset UI
             return;
         }
-        await updateDoc(doc(db, getColName(), codigo), { revisado: false });
-        addHistory(codigo, `Item DESBLOQUEADO por ${currentUser.username}`);
+        await updateDoc(doc(db, getColName(), codigo), { 
+            revisado: false,
+            ultimaRevision: "",
+            revisadoPor: ""
+        });
+        addHistory(codigo, `Item DESBLOQUEADO y REVISIÓN REINICIADA por ${currentUser.username}`);
     }
     // No es necesario llamar a loadInventory() porque onSnapshot detectará el cambio y actualizará la UI
 };
@@ -481,114 +559,158 @@ let aiContext = {
 };
 
 async function processAI() {
-    const queryStr = ELEMENTS.aiInput.value.toLowerCase().trim();
+    const queryStrRaw = ELEMENTS.aiInput.value.trim();
+    const queryStr = queryStrRaw.toLowerCase();
     if (!queryStr) return;
 
     ELEMENTS.aiMessages.style.maxHeight = '450px';
     ELEMENTS.aiMessages.style.padding = '15px';
     
-    appendMessage('user', queryStr);
+    appendMessage('user', queryStrRaw);
     ELEMENTS.aiInput.value = '';
 
+    // Typing indicator
+    const typingId = 'typing-' + Date.now();
+    const typingDiv = document.createElement('div');
+    typingDiv.id = typingId;
+    typingDiv.className = 'ai-message assistant typing-dots';
+    typingDiv.innerHTML = '<span></span><span></span><span></span>';
+    ELEMENTS.aiMessages.appendChild(typingDiv);
+    ELEMENTS.aiMessages.scrollTop = ELEMENTS.aiMessages.scrollHeight;
+
     let response = "";
-    const greetings = ["¡Hola!", "¡Claro!", "Con gusto te ayudo.", "He revisado el sistema y esto es lo que encontré:", "¡Entendido!", "Aquí tienes la información:"];
-    const prefix = greetings[Math.floor(Math.random() * greetings.length)] + " ";
+    const greetings = ["¡Hola!", "¡Claro que sí!", "Con muchísimo gusto.", "¡Aquí tienes!", "¡Entendido!", "¡Listo!"];
+    const prefix = greetings[Math.floor(Math.random() * greetings.length)];
 
-    // Detectar si el usuario está siguiendo una conversación (ej: "tipo", "donde estan", "cuantos")
-    const isFollowUp = (queryStr.length < 15 && aiContext.lastTopic);
+    // Normalizar texto para ignorar tildes
+    const normalizedQuery = queryStr.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    // Función segura para buscar intenciones
+    const hasWord = (words) => {
+        const tokens = normalizedQuery.split(/[ \.\?,]+/);
+        return words.some(w => tokens.some(t => t.includes(w)));
+    };
 
-    // 1. Manejo de TRAMOS
-    if (queryStr.includes("tramo") || (isFollowUp && aiContext.lastTopic === "tramos")) {
-        const tramos = currentInventory.filter(i => i.descripcion.toLowerCase().includes("tramo"));
-        aiContext.lastTopic = "tramos";
-        aiContext.lastResults = tramos;
+    let intent = null;
+    if (hasWord(["cuant", "cantid", "total"])) intent = "count";
+    else if (hasWord(["donde", "ubicacion", "lugar", "estan", "están", "cuarto"])) intent = "location";
+    else if (hasWord(["tipo", "clase", "cuales", "modelo", "marca"])) intent = "types";
+    else if (hasWord(["mal", "dañad", "danad", "reparar", "defectuoso", "roto"])) intent = "damaged";
+    else if (hasWord(["falta", "pendient", "sin revisar"])) intent = "pending";
+    else if (hasWord(["revisad", "listo", "progreso", "avance"])) intent = "reviewed";
 
-        if (queryStr.includes("cuantos") || queryStr.includes("cuántos") || queryStr.includes("cantidad")) {
-            response = `${prefix} Actualmente tenemos <strong>${tramos.length} tramos</strong> registrados en la unidad. ¿Te gustaría saber de qué tipos son o dónde están ubicados?`;
-        } else if (queryStr.includes("tipo") || queryStr.includes("clase")) {
-            const types = [...new Set(tramos.map(i => i.descripcion))];
-            response = `${prefix} Estos son los tipos de tramos que tenemos en inventario:<br>` + types.map(t => `- ${t}`).join("<br>");
-        } else if (queryStr.includes("donde") || queryStr.includes("dónde") || queryStr.includes("ubicacion") || queryStr.includes("están") || queryStr.includes("estan")) {
-            response = `${prefix} Aquí tienes las ubicaciones de los tramos:<br>` + 
-                       tramos.slice(0, 8).map(t => `- ${t.descripcion}: <strong>${t.ubicacion || 'S/N'}</strong>`).join("<br>") +
-                       (tramos.length > 8 ? `<br>...y ${tramos.length - 8} más.` : "");
-        } else {
-            response = `${prefix} He encontrado ${tramos.length} tramos. ¿Qué información necesitas sobre ellos? (puedes preguntar por cantidad, tipos o ubicaciones).`;
-        }
-    }
-    // 2. Manejo de PITONES
-    else if (queryStr.includes("piton") || queryStr.includes("pitón") || (isFollowUp && aiContext.lastTopic === "pitones")) {
-        const pitones = currentInventory.filter(i => i.descripcion.toLowerCase().includes("piton"));
-        aiContext.lastTopic = "pitones";
-        aiContext.lastResults = pitones;
+    // Stop words para extraer solo el "Sujeto/Item"
+    const stopWords = ["quiero", "saber", "buscar", "busca", "muestrame", "dime", "sobre", "los", "las", "el", "la", "un", "una", "unos", "unas", "hay", "tienen", "tiene", "cuanto", "cuantos", "cuantas", "cantidad", "total", "donde", "ubicacion", "lugar", "estan", "están", "cuarto", "tipo", "tipos", "clase", "clases", "cuales", "modelo", "marca", "mal", "malo", "malos", "dañado", "dañados", "danado", "danados", "reparar", "defectuoso", "roto", "falta", "faltan", "pendiente", "pendientes", "sin", "revisar", "revisado", "revisados", "listo", "progreso", "avance", "hola", "buenos", "buenas", "ayuda", "que", "haces", "quien", "eres", "saludos", "para", "como", "con", "estamos"];
 
-        if (queryStr.includes("cuantos") || queryStr.includes("cuántos")) {
-            response = `${prefix} Tenemos un total de <strong>${pitones.length} pitones</strong>. ¿Deseas que te muestre en qué ubicación está alguno en particular?`;
-        } else {
-            const ubis = [...new Set(pitones.slice(0,3).map(p => p.ubicacion))];
-            response = `${prefix} Hay ${pitones.length} pitones registrados. Se encuentran principalmente en ${ubis.join(", ")}.`;
-        }
-    }
-    // 3. Manejo de UBICACIONES ESPECÍFICAS (ej: I-307-U-28)
-    else if (queryStr.match(/i-\d+-u-\d+/)) {
-        const ubi = queryStr.match(/i-\d+-u-\d+/)[0].toUpperCase();
-        const results = currentInventory.filter(i => i.ubicacion && i.ubicacion.toUpperCase().includes(ubi));
-        aiContext.lastTopic = "ubicacion";
-        aiContext.lastResults = results;
-        
-        if (results.length > 0) {
-            response = `${prefix} En la ubicación <strong>${ubi}</strong> encontré estos ${results.length} ítems:<br>` + 
-                       results.map(r => `- ${r.descripcion}`).join("<br>");
-        } else {
-            response = `He buscado en la ubicación <strong>${ubi}</strong> pero no encontré equipos registrados allí por el momento.`;
-        }
-    }
-    // 4. Estadísticas de Revisión y Resúmenes
-    else if (queryStr.includes("revisa") || queryStr.includes("analiza") || queryStr.includes("resumen") || queryStr.includes("progreso")) {
-        const rev = currentInventory.filter(i => i.revisado).length;
-        const total = currentInventory.length;
-        const porc = ((rev / total) * 100).toFixed(1);
-        response = `¡Excelente pregunta! Llevamos un progreso del <strong>${porc}%</strong>. Se han revisado ${rev} equipos de un total de ${total}. ¿Quieres ver la lista de lo que aún falta revisar?`;
-        aiContext.lastTopic = "revision";
-    }
-    // 5. Saludos, Ayuda y Personalidad
-    else if (queryStr.includes("hola") || queryStr.includes("buenos") || queryStr.includes("que puedes hacer") || queryStr.includes("ayuda")) {
-        response = `¡Hola! 👋 Soy tu asistente inteligente de inventario. Estoy aquí para ayudarte a encontrar equipos, contar existencias o darte reportes de estado. <br><br>Puedes preguntarme cosas como:<br>-"¿Cuántos tramos hay?"<br>-"¿Dónde están los pitones?"<br>-"¿Qué hay en la ubicación I-307-U-28?"<br>-"Dame un resumen del progreso."`;
-        aiContext.lastTopic = null;
-    }
-    // 6. Búsqueda Fallback Inteligente
-    else {
-        const words = queryStr.split(" ").filter(w => w.length > 2);
-        const results = currentInventory.filter(i => 
-            words.some(w => i.descripcion.toLowerCase().includes(w) || (i.ubicacion && i.ubicacion.toLowerCase().includes(w)))
+    // Detectar de qué estamos hablando (Entidad)
+    let searchWords = normalizedQuery.split(/[ \.\?,]+/).filter(w => w.length > 2 && !stopWords.includes(w));
+    
+    let topic = aiContext.lastTopic;
+    let results = aiContext.lastResults || currentInventory;
+    let newTopicDetected = false;
+
+    // Búsqueda directa por ubicación
+    const ubiMatch = queryStr.match(/i-\d+-u-\d+/i) || queryStr.match(/i-\d+-u-28/i) || queryStr.match(/i-\d+-u-8/i);
+    
+    if (ubiMatch) {
+        topic = ubiMatch[0].toUpperCase();
+        results = currentInventory.filter(i => i.ubicacion && i.ubicacion.toUpperCase().includes(topic));
+        newTopicDetected = true;
+    } else if (searchWords.length > 0) {
+        // Búsqueda dinámica ultra-inteligente
+        const searchResults = currentInventory.filter(i => 
+            searchWords.some(w => 
+                i.descripcion.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(w) || 
+                (i.codigo && i.codigo.toLowerCase().includes(w))
+            )
         );
-        
-        if (results.length > 0) {
-            aiContext.lastTopic = "busqueda";
-            aiContext.lastResults = results;
-            response = `${prefix} He encontrado algunos resultados que podrían interesarte:<br>` + 
-                       results.slice(0, 5).map(r => `- <strong>${r.descripcion}</strong> (${r.ubicacion || 'S/N'})`).join("<br>");
-        } else {
-            response = `Mmm, no logré encontrar información sobre "${queryStr}". ¿Podrías intentar con otra palabra o preguntarme por una ubicación específica?`;
+        if (searchResults.length > 0) {
+            topic = searchWords.join(" ");
+            results = searchResults;
+            newTopicDetected = true;
         }
     }
 
-    setTimeout(() => appendMessage('ai', response), 600);
+    // Lógica de fallback si no detectamos nada nuevo ni había tema anterior
+    if (!newTopicDetected && !topic && !intent && !hasWord(["hola", "ayuda"])) {
+        topic = "all";
+        results = currentInventory;
+    } else if (!newTopicDetected && topic && !intent) {
+        if (searchWords.length > 0 && !hasWord(["hola", "ayuda"])) {
+            response = `Uy, he revisado todo el inventario pero no encontré nada relacionado con "<strong>${searchWords.join(" ")}</strong>". 😔 ¿Podrías intentar con otro nombre o revisar cómo está escrito?`;
+            setTimeout(() => { document.getElementById(typingId)?.remove(); appendMessage('ai', response); }, 800);
+            return;
+        }
+    }
+
+    // ¡La Memoria! Guardamos el contexto si no estamos hablando del general
+    if (topic !== "all" && topic) {
+        aiContext.lastTopic = topic;
+        aiContext.lastResults = results;
+    }
+
+    // Funciones de formato
+    const groupBy = (array, key) => {
+        return array.reduce((res, curr) => {
+            const groupKey = curr[key] || "Sin asignar";
+            (res[groupKey] = res[groupKey] || []).push(curr);
+            return res;
+        }, {});
+    };
+
+    const topicName = topic === "all" ? "ítems en general" : `<strong>${topic}</strong>`;
+
+    // Generar la respuesta mágica
+    if (hasWord(["hola", "buenos", "buenas", "ayuda", "que haces", "eres"])) {
+        response = `¡Hola! 👋 Soy tu Cerebro Logístico Súper Inteligente. Puedo ayudarte con todo el inventario.<br><br>Dime qué buscas (ej: <em>"escalera"</em>, <em>"pitones"</em>) y luego simplemente sígueme preguntando (<em>"tipos"</em>, <em>"dónde están"</em>, <em>"estado"</em>). ¡Tengo memoria para hacer la charla súper natural! 🧠✨`;
+        aiContext.lastTopic = null;
+    } else if (intent === "count") {
+        response = `${prefix} Tenemos un total de <strong>${results.length}</strong> ${topicName} registrados.`;
+    } else if (intent === "location") {
+        if (results.length === 0) {
+            response = `No encontré ${topicName} para mostrarte su ubicación.`;
+        } else {
+            const groups = groupBy(results, "ubicacion");
+            const locStrings = Object.keys(groups).map(loc => `📍 <strong>${loc}</strong>: ${groups[loc].length} unidades`).join("<br>");
+            response = `${prefix} Los ${topicName} están distribuidos así:<br>${locStrings}`;
+        }
+    } else if (intent === "types") {
+        if (results.length === 0) {
+             response = `No hay ${topicName} para mostrarte los tipos.`;
+        } else {
+            const types = [...new Set(results.map(i => i.descripcion))];
+            response = `${prefix} Sobre los ${topicName}, tenemos estas clases:<br>🔹 ` + types.join("<br>🔹 ");
+        }
+    } else if (intent === "damaged") {
+        const bad = results.filter(i => (i.estado && i.estado.toLowerCase().includes("dañad")) || i.estado === "malo");
+        if (bad.length > 0) {
+            response = `${prefix} Encontré <strong>${bad.length}</strong> ${topicName} en mal estado:<br>⚠️ ` + bad.slice(0,5).map(i => `${i.descripcion} (${i.codigo}) en ${i.ubicacion || 'S/U'}`).join("<br>⚠️ ");
+        } else {
+            response = `${prefix} ¡Excelentes noticias! 🥳 No hay ${topicName} reportados como dañados.`;
+        }
+    } else if (intent === "pending") {
+        const pending = results.filter(i => !i.revisado);
+        response = `${prefix} Todavía nos faltan <strong>${pending.length}</strong> ${topicName} por revisar.`;
+    } else if (intent === "reviewed") {
+        const rev = results.filter(i => i.revisado).length;
+        const total = results.length;
+        const porc = total === 0 ? 0 : ((rev / total) * 100).toFixed(1);
+        response = `${prefix} El progreso de revisión para los ${topicName} es del <strong>${porc}%</strong> (${rev}/${total} completados).`;
+    } else if (newTopicDetected && !intent) {
+        response = `${prefix} ¡Los encontré! Hay <strong>${results.length}</strong> ${topicName}.<br><br>💡 <em>¡Prueba a preguntarme "tipos", "dónde están", "cuántos hay" o "cuáles están dañados"! Te seguiré el hilo.</em>`;
+    } else {
+        response = `Mmm, recuerdo que hablábamos de ${topicName}, pero no me quedó muy clara la pregunta. 😅 Intenta pedirme "ubicaciones", "tipos" o "resumen".`;
+    }
+
+    setTimeout(() => {
+        document.getElementById(typingId)?.remove();
+        appendMessage('ai', response);
+    }, 800);
 }
 
 function appendMessage(role, text) {
     const div = document.createElement('div');
-    div.style.padding = "8px 12px";
-    div.style.borderRadius = "8px";
-    div.style.maxWidth = "85%";
-    if (role === 'user') {
-        div.style.alignSelf = "flex-end";
-        div.style.background = "#e2e8f0";
-    } else {
-        div.style.alignSelf = "flex-start";
-        div.style.background = "white";
-        div.style.border = "1px solid #e2e8f0";
-    }
+    div.className = `ai-message ${role === 'user' ? 'user' : 'assistant'}`;
     div.innerHTML = text;
     ELEMENTS.aiMessages.appendChild(div);
     ELEMENTS.aiMessages.scrollTop = ELEMENTS.aiMessages.scrollHeight;
@@ -622,12 +744,14 @@ function generatePDF() {
         item.modelo || '-',
         item.serie || '-',
         item.estado || '-',
+        item.ultimaRevision || '-',
+        item.revisadoPor || '-',
         item.revisado ? 'Sí' : 'No',
         item.comentarios || ''
     ]);
     
     doc.autoTable({
-        head: [['Foto', '#', 'Código', 'SICAFI', 'PF', 'Descripción', 'Ubicación', 'Marca', 'Modelo', 'Serie', 'Estado', 'Revisado', 'Comentarios']],
+        head: [['Foto', '#', 'Código', 'SICAFI', 'PF', 'Descripción', 'Ubicación', 'Marca', 'Modelo', 'Serie', 'Estado', 'Última Rev.', 'Personal', 'Revisado', 'Comentarios']],
         body: rows,
         startY: 85,
         theme: 'grid',
@@ -644,14 +768,18 @@ function generatePDF() {
             valign: 'middle'
         },
         columnStyles: {
-            0: { cellWidth: 80 }, // Foto
-            1: { cellWidth: 25 }, // #
-            2: { cellWidth: 45 }, // Código
-            3: { cellWidth: 45 }, // SICAFI
-            4: { cellWidth: 45 }, // PF
-            5: { cellWidth: 100 }, // Descripción
-            6: { cellWidth: 60 }, // Ubicación
-            12: { cellWidth: 80 } // Comentarios
+            0: { cellWidth: 70 }, // Foto
+            1: { cellWidth: 20 }, // #
+            2: { cellWidth: 40 }, // Código
+            3: { cellWidth: 40 }, // SICAFI
+            4: { cellWidth: 40 }, // PF
+            5: { cellWidth: 80 }, // Descripción
+            6: { cellWidth: 50 }, // Ubicación
+            10: { cellWidth: 40 }, // Estado
+            11: { cellWidth: 50 }, // Última Rev.
+            12: { cellWidth: 50 }, // Personal
+            13: { cellWidth: 40 }, // Revisado
+            14: { cellWidth: 70 } // Comentarios
         },
         didDrawCell: (data) => {
             if (data.section === 'body' && data.column.index === 0) {
