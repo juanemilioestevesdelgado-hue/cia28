@@ -1,7 +1,7 @@
 // Version 32.1 - U-8 / T-8 System
 import { inventoryCIA28 } from './data.js?v=32.3';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit, writeBatch } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB6ExzbxT6vWH7a195TdWD8yv7xNDjbkBc",
@@ -174,35 +174,41 @@ async function loadInventory() {
     let needsSync = initialSnap.empty;
     if (!needsSync) {
         // Verificar si los IDs están usando los viejos fabricados o si no coinciden
-        const hasBadCode = initialSnap.docs.some(doc => doc.id === "18567" || doc.id.includes("ARPON-29"));
-        if (hasBadCode || initialSnap.size !== inventoryCIA28.length) needsSync = true;
+        const hasBadCode = initialSnap.docs.some(doc => doc.id === "18567" || doc.id.includes("ARPON-29") || doc.id === "00052588");
+        // Si la colección de Firebase tiene menos elementos, forzamos sincronización
+        if (initialSnap.size < inventoryCIA28.length || hasBadCode) needsSync = true;
     }
 
-    // Fuerza la sincronización incondicional solo por esta vez para arreglarlo definitivamente
-    needsSync = true; 
-
     if (needsSync) {
-        console.log("Limpiando base de datos vieja y subiendo inventario exacto...");
-        // Borrar todos los viejos
-        for (const oldDoc of initialSnap.docs) {
-            await deleteDoc(doc(db, colName, oldDoc.id));
+        console.log("Limpiando base de datos vieja y subiendo inventario exacto usando Batch...");
+        try {
+            const batch = writeBatch(db);
+            
+            // Borrar todos los viejos
+            for (const oldDoc of initialSnap.docs) {
+                batch.delete(doc(db, colName, oldDoc.id));
+            }
+            
+            // Subir los nuevos
+            for (const item of inventoryCIA28) {
+                const safeId = (item.codigo && item.codigo !== "-") ? item.codigo : ("NO-CODE-" + Math.random().toString(36).substr(2, 9));
+                const docRef = doc(db, colName, safeId);
+                batch.set(docRef, {
+                    ...item,
+                    revisado: false,
+                    comentarios: "",
+                    estado: item.estado || "",
+                    ultimaRevision: "",
+                    proximaRevision: "",
+                    revisadoPor: ""
+                });
+            }
+            
+            await batch.commit();
+            console.log("Inventario subido correctamente en batch.");
+        } catch(error) {
+            console.error("Error al sincronizar batch:", error);
         }
-        
-        // Subir los nuevos
-        for (const item of inventoryCIA28) {
-            const safeId = (item.codigo && item.codigo !== "-") ? item.codigo : ("NO-CODE-" + Math.random().toString(36).substr(2, 9));
-            const docRef = doc(db, colName, safeId);
-            await setDoc(docRef, {
-                ...item,
-                revisado: false,
-                comentarios: "",
-                estado: item.estado || "",
-                ultimaRevision: "",
-                proximaRevision: "",
-                revisadoPor: ""
-            });
-        }
-        console.log("Inventario subido correctamente.");
     }
 
     // Listener en tiempo real: Actualiza la UI automáticamente al detectar cambios en Firebase
