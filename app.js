@@ -1,5 +1,5 @@
 // Version 32.1 - U-8 / T-8 System
-import { inventoryU8 } from './data.js?v=32.3';
+import { inventoryCIA28 } from './data.js?v=32.3';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
@@ -169,19 +169,28 @@ async function loadInventory() {
     const colName = getColName();
     const colRef = collection(db, colName);
     
-    // Verificación inicial para sincronizar si está vacío
+    // Verificación inicial para sincronizar si está vacío o si le faltan los datos correctos
     const initialSnap = await getDocs(colRef);
-    if (initialSnap.empty) {
-        for (const item of inventoryU8) {
-            await setDoc(doc(db, colName, item.codigo), {
+    let needsSync = initialSnap.empty;
+    if (!needsSync) {
+        // Verificar si falta un ítem clave de CIA-28 (ej: Absorbente 00052588) para forzar la sincronización
+        const hasKeyItem = initialSnap.docs.some(doc => doc.id === "00052588" || doc.id === "00052614");
+        if (!hasKeyItem) needsSync = true;
+    }
+
+    if (needsSync) {
+        console.log("Sincronizando base de datos local con Firebase...");
+        for (const item of inventoryCIA28) {
+            const docRef = doc(db, colName, item.codigo || ("NO-CODE-" + Math.random()));
+            await setDoc(docRef, {
                 ...item,
                 revisado: false,
                 comentarios: "",
-                estado: "",
+                estado: item.estado || "",
                 ultimaRevision: "",
                 proximaRevision: "",
                 revisadoPor: ""
-            });
+            }, { merge: true });
         }
     }
 

@@ -1,4 +1,4 @@
-const inventoryU8 = [
+const inventoryCIA28 = [
     { codigo: "00052588", sicafi: "2027887", pf: "28462", descripcion: "ABSORVENTE DE 2 1/2\"", ubicacion: "I-307-U-28", marca: "DESAUTEL", modelo: "NA", serie: "NA", estado: "DAÑADO" },
     { codigo: "00052614", sicafi: "2027913", pf: "18508", descripcion: "ABSORVENTE DE 2 1/2\"", ubicacion: "I-307-U-28", marca: "DESAUTEL", modelo: "NA", serie: "NA" },
     { codigo: "18567", sicafi: "-", pf: "18567", descripcion: "ABSORVENTE DE 2 1/2\"", ubicacion: "I-307-U-28", marca: "DESAUTEL", modelo: "NA", serie: "NA" },
@@ -158,4 +158,4 @@ const inventoryU8 = [
     { codigo: "00031455", sicafi: "2003232", pf: "18277", descripcion: "PALAS P/CUADRADA", ubicacion: "I-307-U-28", marca: "No Aplica", modelo: "NA", serie: "NA" }
 ];
 
-export { inventoryU8 };
+export { inventoryCIA28 };
