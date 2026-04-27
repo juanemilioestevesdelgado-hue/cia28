@@ -475,82 +475,105 @@ document.querySelector('.close-history-modal').onclick = () => document.getEleme
 ELEMENTS.sendAi.onclick = processAI;
 ELEMENTS.aiInput.onkeypress = (e) => { if (e.key === 'Enter') processAI(); };
 
+let aiContext = {
+    lastTopic: null,
+    lastResults: []
+};
+
 async function processAI() {
     const queryStr = ELEMENTS.aiInput.value.toLowerCase().trim();
     if (!queryStr) return;
 
-    ELEMENTS.aiMessages.style.maxHeight = '400px';
+    ELEMENTS.aiMessages.style.maxHeight = '450px';
     ELEMENTS.aiMessages.style.padding = '15px';
     
     appendMessage('user', queryStr);
     ELEMENTS.aiInput.value = '';
 
     let response = "";
-    
-    // 1. Contador / Estadísticas
-    if (queryStr.includes("cuántos") || queryStr.includes("cuantos") || queryStr.includes("cantidad")) {
-        if (queryStr.includes("tramos")) {
-            const count = currentInventory.filter(i => i.descripcion.toLowerCase().includes("tramo")).length;
-            response = `En la unidad ${currentUnit} hay ${count} tramos registrados.`;
-        } else if (queryStr.includes("pitones")) {
-            const count = currentInventory.filter(i => i.descripcion.toLowerCase().includes("piton")).length;
-            response = `He contado ${count} pitones en el inventario actual.`;
-        } else if (queryStr.includes("revisado")) {
-             const rev = currentInventory.filter(i => i.revisado).length;
-             response = `Se han revisado ${rev} items de un total de ${currentInventory.length}.`;
+    const greetings = ["¡Hola!", "¡Claro!", "Con gusto te ayudo.", "He revisado el sistema y esto es lo que encontré:", "¡Entendido!", "Aquí tienes la información:"];
+    const prefix = greetings[Math.floor(Math.random() * greetings.length)] + " ";
+
+    // Detectar si el usuario está siguiendo una conversación (ej: "tipo", "donde estan", "cuantos")
+    const isFollowUp = (queryStr.length < 15 && aiContext.lastTopic);
+
+    // 1. Manejo de TRAMOS
+    if (queryStr.includes("tramo") || (isFollowUp && aiContext.lastTopic === "tramos")) {
+        const tramos = currentInventory.filter(i => i.descripcion.toLowerCase().includes("tramo"));
+        aiContext.lastTopic = "tramos";
+        aiContext.lastResults = tramos;
+
+        if (queryStr.includes("cuantos") || queryStr.includes("cuántos") || queryStr.includes("cantidad")) {
+            response = `${prefix} Actualmente tenemos <strong>${tramos.length} tramos</strong> registrados en la unidad. ¿Te gustaría saber de qué tipos son o dónde están ubicados?`;
+        } else if (queryStr.includes("tipo") || queryStr.includes("clase")) {
+            const types = [...new Set(tramos.map(i => i.descripcion))];
+            response = `${prefix} Estos son los tipos de tramos que tenemos en inventario:<br>` + types.map(t => `- ${t}`).join("<br>");
+        } else if (queryStr.includes("donde") || queryStr.includes("dónde") || queryStr.includes("ubicacion") || queryStr.includes("están") || queryStr.includes("estan")) {
+            response = `${prefix} Aquí tienes las ubicaciones de los tramos:<br>` + 
+                       tramos.slice(0, 8).map(t => `- ${t.descripcion}: <strong>${t.ubicacion || 'S/N'}</strong>`).join("<br>") +
+                       (tramos.length > 8 ? `<br>...y ${tramos.length - 8} más.` : "");
         } else {
-            response = `El inventario total de ${currentUnit} tiene ${currentInventory.length} items.`;
-        }
-    } 
-    // 2. Búsqueda por Ubicación (Si el query parece una ubicación o menciona ubicación)
-    else if (queryStr.includes("ubicacion") || queryStr.includes("donde") || queryStr.includes("dónde") || queryStr.match(/i-\d+-u-\d+/)) {
-        const ubicacionMatch = queryStr.match(/i-\d+-u-\d+/);
-        if (ubicacionMatch) {
-            const targetUbi = ubicacionMatch[0].toUpperCase();
-            const results = currentInventory.filter(i => i.ubicacion && i.ubicacion.toUpperCase().includes(targetUbi));
-            if (results.length > 0) {
-                response = `En la ubicación <strong>${targetUbi}</strong> hay ${results.length} items:<br>` + 
-                           results.slice(0, 10).map(r => `- ${r.descripcion}`).join("<br>") + 
-                           (results.length > 10 ? "<br>...y otros más." : "");
-            } else {
-                response = `No encontré nada en la ubicación ${targetUbi}.`;
-            }
-        } else {
-            // Búsqueda general de items por nombre mencionando "donde"
-            const words = queryStr.split(" ").filter(w => w.length > 3 && !["donde", "esta", "donde", "dónde", "ubicacion", "ubicación", "está"].includes(w));
-            if (words.length > 0) {
-                const results = currentInventory.filter(i => words.some(w => i.descripcion.toLowerCase().includes(w)));
-                if (results.length > 0) {
-                    response = results.slice(0, 5).map(r => `<strong>${r.descripcion}</strong> está en: ${r.ubicacion || 'S/N'}`).join("<br>");
-                }
-            }
+            response = `${prefix} He encontrado ${tramos.length} tramos. ¿Qué información necesitas sobre ellos? (puedes preguntar por cantidad, tipos o ubicaciones).`;
         }
     }
-    // 3. Estado de los equipos
-    else if (queryStr.includes("mal") || queryStr.includes("dañado") || queryStr.includes("buen")) {
-        const estado = queryStr.includes("mal") || queryStr.includes("dañado") ? "malo" : "bueno";
-        const results = currentInventory.filter(i => i.estado && i.estado.toLowerCase().includes(estado));
+    // 2. Manejo de PITONES
+    else if (queryStr.includes("piton") || queryStr.includes("pitón") || (isFollowUp && aiContext.lastTopic === "pitones")) {
+        const pitones = currentInventory.filter(i => i.descripcion.toLowerCase().includes("piton"));
+        aiContext.lastTopic = "pitones";
+        aiContext.lastResults = pitones;
+
+        if (queryStr.includes("cuantos") || queryStr.includes("cuántos")) {
+            response = `${prefix} Tenemos un total de <strong>${pitones.length} pitones</strong>. ¿Deseas que te muestre en qué ubicación está alguno en particular?`;
+        } else {
+            const ubis = [...new Set(pitones.slice(0,3).map(p => p.ubicacion))];
+            response = `${prefix} Hay ${pitones.length} pitones registrados. Se encuentran principalmente en ${ubis.join(", ")}.`;
+        }
+    }
+    // 3. Manejo de UBICACIONES ESPECÍFICAS (ej: I-307-U-28)
+    else if (queryStr.match(/i-\d+-u-\d+/)) {
+        const ubi = queryStr.match(/i-\d+-u-\d+/)[0].toUpperCase();
+        const results = currentInventory.filter(i => i.ubicacion && i.ubicacion.toUpperCase().includes(ubi));
+        aiContext.lastTopic = "ubicacion";
+        aiContext.lastResults = results;
+        
         if (results.length > 0) {
-            response = `Hay ${results.length} items en estado ${estado.toUpperCase()}:<br>` + 
-                       results.slice(0, 10).map(r => `- ${r.descripcion} (${r.ubicacion})`).join("<br>");
+            response = `${prefix} En la ubicación <strong>${ubi}</strong> encontré estos ${results.length} ítems:<br>` + 
+                       results.map(r => `- ${r.descripcion}`).join("<br>");
         } else {
-            response = `No hay items registrados en estado ${estado.toUpperCase()}.`;
+            response = `He buscado en la ubicación <strong>${ubi}</strong> pero no encontré equipos registrados allí por el momento.`;
         }
     }
-    // 4. Búsqueda por palabra clave (Fallback)
+    // 4. Estadísticas de Revisión y Resúmenes
+    else if (queryStr.includes("revisa") || queryStr.includes("analiza") || queryStr.includes("resumen") || queryStr.includes("progreso")) {
+        const rev = currentInventory.filter(i => i.revisado).length;
+        const total = currentInventory.length;
+        const porc = ((rev / total) * 100).toFixed(1);
+        response = `¡Excelente pregunta! Llevamos un progreso del <strong>${porc}%</strong>. Se han revisado ${rev} equipos de un total de ${total}. ¿Quieres ver la lista de lo que aún falta revisar?`;
+        aiContext.lastTopic = "revision";
+    }
+    // 5. Saludos, Ayuda y Personalidad
+    else if (queryStr.includes("hola") || queryStr.includes("buenos") || queryStr.includes("que puedes hacer") || queryStr.includes("ayuda")) {
+        response = `¡Hola! 👋 Soy tu asistente inteligente de inventario. Estoy aquí para ayudarte a encontrar equipos, contar existencias o darte reportes de estado. <br><br>Puedes preguntarme cosas como:<br>-"¿Cuántos tramos hay?"<br>-"¿Dónde están los pitones?"<br>-"¿Qué hay en la ubicación I-307-U-28?"<br>-"Dame un resumen del progreso."`;
+        aiContext.lastTopic = null;
+    }
+    // 6. Búsqueda Fallback Inteligente
     else {
-        const results = currentInventory.filter(i => i.descripcion.toLowerCase().includes(queryStr) || i.codigo.toLowerCase().includes(queryStr));
+        const words = queryStr.split(" ").filter(w => w.length > 2);
+        const results = currentInventory.filter(i => 
+            words.some(w => i.descripcion.toLowerCase().includes(w) || (i.ubicacion && i.ubicacion.toLowerCase().includes(w)))
+        );
+        
         if (results.length > 0) {
-            response = `Encontré estos resultados:<br>` + 
-                       results.slice(0, 5).map(r => `<strong>${r.descripcion}</strong> (${r.codigo}) - Ubicación: ${r.ubicacion}`).join("<br>");
+            aiContext.lastTopic = "busqueda";
+            aiContext.lastResults = results;
+            response = `${prefix} He encontrado algunos resultados que podrían interesarte:<br>` + 
+                       results.slice(0, 5).map(r => `- <strong>${r.descripcion}</strong> (${r.ubicacion || 'S/N'})`).join("<br>");
+        } else {
+            response = `Mmm, no logré encontrar información sobre "${queryStr}". ¿Podrías intentar con otra palabra o preguntarme por una ubicación específica?`;
         }
     }
 
-    if (!response) {
-        response = "No encontré información específica. Prueba buscando por nombre del equipo, ubicación (ej: I-307-U-28) o estado.";
-    }
-
-    setTimeout(() => appendMessage('ai', response), 500);
+    setTimeout(() => appendMessage('ai', response), 600);
 }
 
 function appendMessage(role, text) {
