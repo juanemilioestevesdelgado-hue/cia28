@@ -202,21 +202,33 @@ function renderTable(data) {
                     <i class="ph ph-caret-down"></i>
                 </button>
             </td>
-            <td><strong>${item.codigo}</strong></td>
-            <td>${item.sicafi || '-'}</td>
-            <td>${item.pf || '-'}</td>
-            <td>${item.descripcion}</td>
             <td>${item.ubicacion || '-'}</td>
             <td>${item.marca || '-'}</td>
             <td>${item.modelo || '-'}</td>
             <td>${item.serie || '-'}</td>
-            <td style="text-align:center;"><span class="badge badge-${item.estado || 'default'}">${item.estado || 'N/A'}</span></td>
-            <td>${item.ultimaRevision || '-'}</td>
-            <td>${item.proximaRevision || '-'}</td>
-            <td class="action-column" style="text-align:center;">
-                <input type="checkbox" ${item.revisado ? 'checked' : ''} onchange="toggleReview('${item.codigo}', this.checked)">
+            <td style="text-align:center;">
+                <select class="status-select status-${item.estado || 'default'}" onchange="updateItemInline('${item.codigo}', 'estado', this.value)">
+                    <option value="">Seleccionar...</option>
+                    <option value="bueno" ${item.estado === 'bueno' ? 'selected' : ''}>Bueno</option>
+                    <option value="malo" ${item.estado === 'malo' ? 'selected' : ''}>Malo</option>
+                    <option value="regular" ${item.estado === 'regular' ? 'selected' : ''}>Regular</option>
+                    <option value="no-existe" ${item.estado === 'no-existe' ? 'selected' : ''}>No Existe</option>
+                </select>
             </td>
-            <td class="action-column">${item.comentarios || ''}</td>
+            <td>
+                <input type="date" value="${item.ultimaRevision || ''}" onchange="updateItemInline('${item.codigo}', 'ultimaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px;">
+            </td>
+            <td>
+                <input type="date" value="${item.proximaRevision || ''}" onchange="updateItemInline('${item.codigo}', 'proximaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px;">
+            </td>
+            <td class="action-column" style="text-align:center;">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" class="custom-checkbox" ${item.revisado ? 'checked' : ''} onchange="toggleReview('${item.codigo}', this.checked)">
+                </div>
+            </td>
+            <td class="action-column">
+                <textarea class="comment-input" onblur="updateItemInline('${item.codigo}', 'comentarios', this.value)" placeholder="Agregar comentarios...">${item.comentarios || ''}</textarea>
+            </td>
             <td class="action-column" style="text-align:center;">
                 <button class="btn-icon" onclick="showHistory('${item.codigo}')"><i class="ph ph-clock-counter-clockwise"></i></button>
             </td>
@@ -226,6 +238,10 @@ function renderTable(data) {
                     ${currentUser.role === 'commander' ? `<button class="btn-icon text-red" onclick="deleteItem('${item.codigo}')"><i class="ph ph-trash"></i></button>` : ''}
                 </div>
             </td>
+            <td>${item.descripcion}</td>
+            <td><strong>${item.codigo}</strong></td>
+            <td>${item.sicafi || '-'}</td>
+            <td>${item.pf || '-'}</td>
         `;
         ELEMENTS.inventoryBody.appendChild(tr);
 
@@ -253,6 +269,22 @@ function renderTable(data) {
         ELEMENTS.inventoryBody.appendChild(photoRow);
     });
 }
+
+window.updateItemInline = async (codigo, field, value) => {
+    const colName = getColName();
+    const updates = {};
+    updates[field] = value;
+    
+    await updateDoc(doc(db, colName, codigo), updates);
+    addHistory(codigo, `Actualización inline: ${field} = ${value}`);
+    
+    // If we changed the state, we might want to refresh stats or the row color
+    if (field === 'estado') {
+        const row = document.getElementById(`row-${codigo}`);
+        // Optionally update class based on estado
+        // loadInventory(); // Full reload might be too slow for every keypress, but okay for select/blur
+    }
+};
 
 window.togglePhotoRow = (codigo) => {
     const row = document.getElementById(`photo-row-${codigo}`);
@@ -437,33 +469,75 @@ async function processAI() {
     const queryStr = ELEMENTS.aiInput.value.toLowerCase().trim();
     if (!queryStr) return;
 
-    ELEMENTS.aiMessages.style.maxHeight = '300px';
+    ELEMENTS.aiMessages.style.maxHeight = '400px';
     ELEMENTS.aiMessages.style.padding = '15px';
     
     appendMessage('user', queryStr);
     ELEMENTS.aiInput.value = '';
 
-    let response = "No encontré información específica. Prueba buscando por nombre o ubicación.";
+    let response = "";
     
-    if (queryStr.includes("cuántos") || queryStr.includes("cuantos")) {
+    // 1. Contador / Estadísticas
+    if (queryStr.includes("cuántos") || queryStr.includes("cuantos") || queryStr.includes("cantidad")) {
         if (queryStr.includes("tramos")) {
             const count = currentInventory.filter(i => i.descripcion.toLowerCase().includes("tramo")).length;
             response = `En la unidad ${currentUnit} hay ${count} tramos registrados.`;
         } else if (queryStr.includes("pitones")) {
             const count = currentInventory.filter(i => i.descripcion.toLowerCase().includes("piton")).length;
             response = `He contado ${count} pitones en el inventario actual.`;
+        } else if (queryStr.includes("revisado")) {
+             const rev = currentInventory.filter(i => i.revisado).length;
+             response = `Se han revisado ${rev} items de un total de ${currentInventory.length}.`;
         } else {
             response = `El inventario total de ${currentUnit} tiene ${currentInventory.length} items.`;
         }
-    } else if (queryStr.includes("donde") || queryStr.includes("dónde") || queryStr.includes("ubicacion")) {
-        const results = currentInventory.filter(i => queryStr.includes(i.descripcion.toLowerCase()));
-        if (results.length > 0) {
-            response = results.map(r => `${r.descripcion}: ${r.ubicacion}`).join("<br>");
+    } 
+    // 2. Búsqueda por Ubicación (Si el query parece una ubicación o menciona ubicación)
+    else if (queryStr.includes("ubicacion") || queryStr.includes("donde") || queryStr.includes("dónde") || queryStr.match(/i-\d+-u-\d+/)) {
+        const ubicacionMatch = queryStr.match(/i-\d+-u-\d+/);
+        if (ubicacionMatch) {
+            const targetUbi = ubicacionMatch[0].toUpperCase();
+            const results = currentInventory.filter(i => i.ubicacion && i.ubicacion.toUpperCase().includes(targetUbi));
+            if (results.length > 0) {
+                response = `En la ubicación <strong>${targetUbi}</strong> hay ${results.length} items:<br>` + 
+                           results.slice(0, 10).map(r => `- ${r.descripcion}`).join("<br>") + 
+                           (results.length > 10 ? "<br>...y otros más." : "");
+            } else {
+                response = `No encontré nada en la ubicación ${targetUbi}.`;
+            }
+        } else {
+            // Búsqueda general de items por nombre mencionando "donde"
+            const words = queryStr.split(" ").filter(w => w.length > 3 && !["donde", "esta", "donde", "dónde", "ubicacion", "ubicación", "está"].includes(w));
+            if (words.length > 0) {
+                const results = currentInventory.filter(i => words.some(w => i.descripcion.toLowerCase().includes(w)));
+                if (results.length > 0) {
+                    response = results.slice(0, 5).map(r => `<strong>${r.descripcion}</strong> está en: ${r.ubicacion || 'S/N'}`).join("<br>");
+                }
+            }
         }
-    } else if (queryStr.includes("analiza") || queryStr.includes("resumen")) {
-        const rev = currentInventory.filter(i => i.revisado).length;
-        const pend = currentInventory.length - rev;
-        response = `Análisis de la ${currentUnit}:<br>- Total: ${currentInventory.length}<br>- Revisados: ${rev}<br>- Pendientes: ${pend}`;
+    }
+    // 3. Estado de los equipos
+    else if (queryStr.includes("mal") || queryStr.includes("dañado") || queryStr.includes("buen")) {
+        const estado = queryStr.includes("mal") || queryStr.includes("dañado") ? "malo" : "bueno";
+        const results = currentInventory.filter(i => i.estado && i.estado.toLowerCase().includes(estado));
+        if (results.length > 0) {
+            response = `Hay ${results.length} items en estado ${estado.toUpperCase()}:<br>` + 
+                       results.slice(0, 10).map(r => `- ${r.descripcion} (${r.ubicacion})`).join("<br>");
+        } else {
+            response = `No hay items registrados en estado ${estado.toUpperCase()}.`;
+        }
+    }
+    // 4. Búsqueda por palabra clave (Fallback)
+    else {
+        const results = currentInventory.filter(i => i.descripcion.toLowerCase().includes(queryStr) || i.codigo.toLowerCase().includes(queryStr));
+        if (results.length > 0) {
+            response = `Encontré estos resultados:<br>` + 
+                       results.slice(0, 5).map(r => `<strong>${r.descripcion}</strong> (${r.codigo}) - Ubicación: ${r.ubicacion}`).join("<br>");
+        }
+    }
+
+    if (!response) {
+        response = "No encontré información específica. Prueba buscando por nombre del equipo, ubicación (ej: I-307-U-28) o estado.";
     }
 
     setTimeout(() => appendMessage('ai', response), 500);
