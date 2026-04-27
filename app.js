@@ -169,19 +169,29 @@ async function loadInventory() {
     const colName = getColName();
     const colRef = collection(db, colName);
     
-    // Verificación inicial para sincronizar si está vacío o si le faltan los datos correctos
+    // Sincronización completa y definitiva
     const initialSnap = await getDocs(colRef);
     let needsSync = initialSnap.empty;
     if (!needsSync) {
-        // Verificar si falta un ítem clave de CIA-28 (ej: Absorbente 00052588) para forzar la sincronización
-        const hasKeyItem = initialSnap.docs.some(doc => doc.id === "00052588" || doc.id === "00052614");
-        if (!hasKeyItem) needsSync = true;
+        // Verificar si los IDs están usando los viejos fabricados o si no coinciden
+        const hasBadCode = initialSnap.docs.some(doc => doc.id === "18567" || doc.id.includes("ARPON-29"));
+        if (hasBadCode || initialSnap.size !== inventoryCIA28.length) needsSync = true;
     }
 
+    // Fuerza la sincronización incondicional solo por esta vez para arreglarlo definitivamente
+    needsSync = true; 
+
     if (needsSync) {
-        console.log("Sincronizando base de datos local con Firebase...");
+        console.log("Limpiando base de datos vieja y subiendo inventario exacto...");
+        // Borrar todos los viejos
+        for (const oldDoc of initialSnap.docs) {
+            await deleteDoc(doc(db, colName, oldDoc.id));
+        }
+        
+        // Subir los nuevos
         for (const item of inventoryCIA28) {
-            const docRef = doc(db, colName, item.codigo || ("NO-CODE-" + Math.random()));
+            const safeId = (item.codigo && item.codigo !== "-") ? item.codigo : ("NO-CODE-" + Math.random().toString(36).substr(2, 9));
+            const docRef = doc(db, colName, safeId);
             await setDoc(docRef, {
                 ...item,
                 revisado: false,
@@ -190,8 +200,9 @@ async function loadInventory() {
                 ultimaRevision: "",
                 proximaRevision: "",
                 revisadoPor: ""
-            }, { merge: true });
+            });
         }
+        console.log("Inventario subido correctamente.");
     }
 
     // Listener en tiempo real: Actualiza la UI automáticamente al detectar cambios en Firebase
