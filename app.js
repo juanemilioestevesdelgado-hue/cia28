@@ -195,6 +195,11 @@ function renderTable(data) {
         if (item.revisado) tr.classList.add('row-reviewed');
         tr.id = `row-${item.codigo}`;
         
+        const lockAttr = item.revisado ? 'disabled' : '';
+        const revisionInfo = item.revisado ? 
+            `<div style="font-size:0.75rem; color:#059669; font-weight:600;">${item.ultimaRevision || '-'}<br><span style="color:#64748b; font-weight:400;">Por: ${item.revisadoPor || 'S/U'}</span></div>` : 
+            `-`;
+
         tr.innerHTML = `
             <td style="text-align:center;">${index + 1}</td>
             <td style="text-align:center;">
@@ -202,12 +207,16 @@ function renderTable(data) {
                     <i class="ph ph-caret-down"></i>
                 </button>
             </td>
+            <td><strong>${item.codigo}</strong></td>
+            <td>${item.sicafi || '-'}</td>
+            <td>${item.pf || '-'}</td>
+            <td>${item.descripcion}</td>
             <td>${item.ubicacion || '-'}</td>
             <td>${item.marca || '-'}</td>
             <td>${item.modelo || '-'}</td>
             <td>${item.serie || '-'}</td>
             <td style="text-align:center;">
-                <select class="status-select status-${item.estado || 'default'}" onchange="updateItemInline('${item.codigo}', 'estado', this.value)">
+                <select ${lockAttr} class="status-select status-${item.estado || 'default'}" onchange="updateItemInline('${item.codigo}', 'estado', this.value)">
                     <option value="">Seleccionar...</option>
                     <option value="bueno" ${item.estado === 'bueno' ? 'selected' : ''}>Bueno</option>
                     <option value="malo" ${item.estado === 'malo' ? 'selected' : ''}>Malo</option>
@@ -215,11 +224,9 @@ function renderTable(data) {
                     <option value="no-existe" ${item.estado === 'no-existe' ? 'selected' : ''}>No Existe</option>
                 </select>
             </td>
+            <td style="text-align:center;">${revisionInfo}</td>
             <td>
-                <input type="date" value="${item.ultimaRevision || ''}" onchange="updateItemInline('${item.codigo}', 'ultimaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px;">
-            </td>
-            <td>
-                <input type="date" value="${item.proximaRevision || ''}" onchange="updateItemInline('${item.codigo}', 'proximaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px;">
+                <input ${lockAttr} type="date" value="${item.proximaRevision || ''}" onchange="updateItemInline('${item.codigo}', 'proximaRevision', this.value)" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px; font-size:0.85rem;">
             </td>
             <td class="action-column" style="text-align:center;">
                 <div class="checkbox-wrapper">
@@ -227,21 +234,17 @@ function renderTable(data) {
                 </div>
             </td>
             <td class="action-column">
-                <textarea class="comment-input" onblur="updateItemInline('${item.codigo}', 'comentarios', this.value)" placeholder="Agregar comentarios...">${item.comentarios || ''}</textarea>
+                <textarea ${lockAttr} class="comment-input" onblur="updateItemInline('${item.codigo}', 'comentarios', this.value)" placeholder="Agregar comentarios..." style="min-height:40px; font-size:0.85rem;">${item.comentarios || ''}</textarea>
             </td>
             <td class="action-column" style="text-align:center;">
                 <button class="btn-icon" onclick="showHistory('${item.codigo}')"><i class="ph ph-clock-counter-clockwise"></i></button>
             </td>
             <td class="action-column">
                 <div style="display:flex; gap:5px;">
-                    <button class="btn-icon" onclick="editItem('${item.codigo}')"><i class="ph ph-pencil"></i></button>
+                    <button ${lockAttr} class="btn-icon" onclick="editItem('${item.codigo}')"><i class="ph ph-pencil"></i></button>
                     ${currentUser.role === 'commander' ? `<button class="btn-icon text-red" onclick="deleteItem('${item.codigo}')"><i class="ph ph-trash"></i></button>` : ''}
                 </div>
             </td>
-            <td>${item.descripcion}</td>
-            <td><strong>${item.codigo}</strong></td>
-            <td>${item.sicafi || '-'}</td>
-            <td>${item.pf || '-'}</td>
         `;
         ELEMENTS.inventoryBody.appendChild(tr);
 
@@ -253,10 +256,10 @@ function renderTable(data) {
             <td colspan="17">
                 <div class="photo-container" style="display:flex; flex-direction:column; gap:15px; padding:20px; background:#f8fafc;">
                     <div style="display:flex; gap:15px; align-items:center;">
-                        <button onclick="uploadItemPhoto('${item.codigo}')" style="background:#eff6ff; color:#3b82f6; border:1px solid #bfdbfe; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:500; display:flex; align-items:center; gap:8px;">
+                        <button ${lockAttr} onclick="uploadItemPhoto('${item.codigo}')" style="background:#eff6ff; color:#3b82f6; border:1px solid #bfdbfe; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:500; display:flex; align-items:center; gap:8px;">
                             <i class="ph ph-camera"></i> Subir Fotografía
                         </button>
-                        <button onclick="deleteItemPhoto('${item.codigo}')" style="background:#ef4444; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:500; display:flex; align-items:center; gap:8px;">
+                        <button ${lockAttr} onclick="deleteItemPhoto('${item.codigo}')" style="background:#ef4444; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:500; display:flex; align-items:center; gap:8px;">
                             <i class="ph ph-trash"></i> Borrar Foto
                         </button>
                     </div>
@@ -277,13 +280,6 @@ window.updateItemInline = async (codigo, field, value) => {
     
     await updateDoc(doc(db, colName, codigo), updates);
     addHistory(codigo, `Actualización inline: ${field} = ${value}`);
-    
-    // If we changed the state, we might want to refresh stats or the row color
-    if (field === 'estado') {
-        const row = document.getElementById(`row-${codigo}`);
-        // Optionally update class based on estado
-        // loadInventory(); // Full reload might be too slow for every keypress, but okay for select/blur
-    }
 };
 
 window.togglePhotoRow = (codigo) => {
@@ -325,12 +321,26 @@ function updateStats() {
 }
 
 window.toggleReview = async (codigo, val) => {
-    if (val && !confirm("¿Marcar este item como revisado?")) {
-        loadInventory();
-        return;
+    if (val) {
+        if (!confirm("¿Desea BLOQUEAR este item y marcarlo como revisado? No podrá editarlo hasta desbloquearlo.")) {
+            loadInventory();
+            return;
+        }
+        const updates = {
+            revisado: true,
+            ultimaRevision: new Date().toLocaleDateString(),
+            revisadoPor: currentUser.username
+        };
+        await updateDoc(doc(db, getColName(), codigo), updates);
+        addHistory(codigo, `Item BLOQUEADO y REVISADO por ${currentUser.username}`);
+    } else {
+        if (!confirm("¿Desea DESBLOQUEAR este item para permitir ediciones?")) {
+            loadInventory();
+            return;
+        }
+        await updateDoc(doc(db, getColName(), codigo), { revisado: false });
+        addHistory(codigo, `Item DESBLOQUEADO por ${currentUser.username}`);
     }
-    await updateDoc(doc(db, getColName(), codigo), { revisado: val });
-    addHistory(codigo, `Cambio estado revisión a: ${val ? 'REVISADO' : 'PENDIENTE'}`);
     loadInventory();
 };
 
