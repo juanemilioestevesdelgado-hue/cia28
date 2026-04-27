@@ -4,13 +4,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBpGkDT1Fz-XqY_H7clwtHYiwyeCsWvrQk",
-  authDomain: "inventario-u-t-8.firebaseapp.com",
-  projectId: "inventario-u-t-8",
-  storageBucket: "inventario-u-t-8.firebasestorage.app",
-  messagingSenderId: "903523003246",
-  appId: "1:903523003246:web:bd4cbd336d7f01ac46ef7f",
-  measurementId: "G-LFWZTZFGRR"
+  apiKey: "AIzaSyB6ExzbxT6vWH7a195TdWD8yv7xNDjbkBc",
+  authDomain: "cia28-dff38.firebaseapp.com",
+  projectId: "cia28-dff38",
+  storageBucket: "cia28-dff38.firebasestorage.app",
+  messagingSenderId: "127192013068",
+  appId: "1:127192013068:web:bf2f00eba74c6037a0d129",
+  measurementId: "G-D2GSQC0MH4"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -18,6 +18,7 @@ const db = getFirestore(app);
 
 let currentUnit = null; // Will be set after selection
 let currentInventory = [];
+
 let currentUser = null;
 
 const ELEMENTS = {
@@ -124,8 +125,7 @@ function showUnitSelection() {
     ELEMENTS.unitSelection.style.display = 'flex';
 }
 
-document.getElementById('select-u8').onclick = () => startApp('U-8');
-document.getElementById('select-t8').onclick = () => startApp('T-8');
+document.getElementById('select-u8').onclick = () => startApp('CIA-28');
 
 function startApp(unit) {
     currentUnit = unit;
@@ -155,7 +155,7 @@ ELEMENTS.changeUnitBtn.onclick = () => {
 ELEMENTS.logoutBtn.onclick = () => location.reload();
 
 function getColName() {
-    return currentUnit === 'T-8' ? 'inventario_t8' : 'inventario_u8';
+    return 'inventario_cia28';
 }
 
 let inventoryListener = null;
